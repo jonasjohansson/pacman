@@ -105,19 +105,19 @@ function restartGame() {
     pacman.targetX = pos.x;
     pacman.targetY = pos.y;
   });
-  
+
   ghosts.forEach((ghost, i) => {
     const pos = [
-      { x: 5, y: 13 },
-      { x: 6, y: 13 },
-      { x: 20, y: 13 },
-      { x: 21, y: 13 },
+      { x: 11, y: 11 }, // top-left of cage
+      { x: 13, y: 11 }, // top-center of cage
+      { x: 15, y: 11 }, // top-right of cage
+      { x: 13, y: 16 }, // bottom-center of cage
     ][i];
     ghost.x = pos.x;
     ghost.y = pos.y;
     ghost.px = pos.x * CELL_SIZE + CHARACTER_OFFSET;
     ghost.py = pos.y * CELL_SIZE + CHARACTER_OFFSET;
-    
+
     // Find initial direction
     for (const dir of DIRECTIONS) {
       const newX = pos.x + dir.x;
@@ -132,14 +132,26 @@ function restartGame() {
     }
     ghost.moveTimer = 0;
   });
-  
+
   console.log("%cGame Restarted!", "color: orange; font-weight: bold;");
 }
 
 function selectPacman(colorName) {
   const colorIndex = COLORS.indexOf(colorName.toLowerCase());
   if (colorIndex !== -1 && pacmen[colorIndex]) {
+    // Remove selected class from all pacmen
+    pacmen.forEach((pacman) => {
+      if (pacman && pacman.element) {
+        pacman.element.classList.remove("selected");
+      }
+    });
+
+    // Add selected class to the chosen pacman
     currentPacman = colorIndex;
+    if (pacmen[colorIndex] && pacmen[colorIndex].element) {
+      pacmen[colorIndex].element.classList.add("selected");
+    }
+
     console.log(`%cNow controlling ${colorName} pacman`, `color: ${COLORS[colorIndex]}; font-weight: bold;`);
   }
 }
@@ -152,7 +164,7 @@ function init() {
     const GUI = lil.GUI;
     if (gui) gui.destroy(); // Destroy existing GUI if any
     gui = new GUI({ container: guiContainer });
-    
+
     const guiParams = {
       difficulty: 0.8,
       playerColor: "Red",
@@ -161,25 +173,30 @@ function init() {
       start: () => startGame(),
       restart: () => restartGame(),
     };
-    
+
     gui.add(guiParams, "start").name("Start");
     gui.add(guiParams, "restart").name("Restart");
-    gui.add(guiParams, "playerColor", ["Red", "Green", "Blue", "Yellow"])
+    gui
+      .add(guiParams, "playerColor", ["Red", "Green", "Blue", "Yellow"])
       .name("Player")
       .onChange((value) => {
         selectPacman(value);
       });
-    gui.add(guiParams, "difficulty", 0, 1, 0.1)
+
+    gui
+      .add(guiParams, "difficulty", 0, 1, 0.1)
       .name("AI Skill")
       .onChange((value) => {
         aiDifficulty = value;
       });
-    gui.add(guiParams, "pacmanSpeed", 0.1, 3, 0.1)
+    gui
+      .add(guiParams, "pacmanSpeed", 0.1, 3, 0.1)
       .name("Pacman Speed")
       .onChange((value) => {
         pacmanSpeed = value;
       });
-    gui.add(guiParams, "ghostSpeed", 0.1, 3, 0.1)
+    gui
+      .add(guiParams, "ghostSpeed", 0.1, 3, 0.1)
       .name("Ghost Speed")
       .onChange((value) => {
         ghostSpeed = value;
@@ -274,13 +291,16 @@ function init() {
     pacmen.push(pacman);
   });
 
-  // Create 4 ghosts in center (valid path positions on row 13)
-  // Row 13 has paths at columns 1-9 and 18-26
+  // Set initial player (after pacmen are created)
+  selectPacman("Red");
+
+  // Create 4 ghosts in the cage (rows 11-16, columns 9-18)
+  // The cage interior has paths at rows 11 and 16, columns 9-18
   const ghostPositions = [
-    { x: 5, y: 13 }, // left side of center
-    { x: 6, y: 13 },
-    { x: 20, y: 13 }, // right side of center
-    { x: 21, y: 13 },
+    { x: 11, y: 11 }, // top-left of cage
+    { x: 13, y: 11 }, // top-center of cage
+    { x: 15, y: 11 }, // top-right of cage
+    { x: 13, y: 16 }, // bottom-center of cage
   ];
 
   ghostPositions.forEach((pos, i) => {
@@ -363,7 +383,7 @@ function init() {
 
       // Move characters smoothly
       moveCharacter(pacmen[currentPacman], pacmanSpeed);
-      
+
       // Move ghosts
       ghosts.forEach((ghost) => {
         moveCharacter(ghost, ghostSpeed);
@@ -382,7 +402,7 @@ function init() {
           ghost.moveTimer += deltaTime;
           // Faster decisions at higher difficulty, but always make decisions when at target
           const moveInterval = Math.max(50, 300 - aiDifficulty * 250);
-          
+
           // Always recalculate if timer expired, or if we can't continue in current direction
           if (ghost.moveTimer >= moveInterval) {
             ghost.moveTimer = 0;
@@ -399,6 +419,10 @@ function init() {
           }
         }
       });
+    }
+
+    if (gameStarted) {
+      checkCollisions();
     }
 
     // Always continue the loop (for rendering), but only update if started
