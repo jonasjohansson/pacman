@@ -399,22 +399,31 @@ function init() {
       ghosts.forEach((ghost) => {
         // After movement, check if ghost reached target and give it a new one immediately
         if (isAtTarget(ghost)) {
-          ghost.moveTimer += deltaTime;
-          // Faster decisions at higher difficulty, but always make decisions when at target
-          const moveInterval = Math.max(50, 300 - aiDifficulty * 250);
+          // Ensure grid position is synced
+          ghost.x = ghost.targetX;
+          ghost.y = ghost.targetY;
 
-          // Always recalculate if timer expired, or if we can't continue in current direction
-          if (ghost.moveTimer >= moveInterval) {
-            ghost.moveTimer = 0;
+          // If ghost has no direction stored, get a new one immediately
+          if (ghost.lastDirX === 0 && ghost.lastDirY === 0) {
             moveGhostAI(ghost);
           } else {
-            // Try to continue, but if blocked, recalculate immediately
-            const prevTargetX = ghost.targetX;
-            const prevTargetY = ghost.targetY;
-            continueInCurrentDirection(ghost);
-            // If continueInCurrentDirection didn't change target, we're blocked - recalculate
-            if (ghost.targetX === prevTargetX && ghost.targetY === prevTargetY) {
+            ghost.moveTimer += deltaTime;
+            // Faster decisions at higher difficulty, but always make decisions when at target
+            const moveInterval = Math.max(50, 300 - aiDifficulty * 250);
+
+            // Always recalculate if timer expired, or if we can't continue in current direction
+            if (ghost.moveTimer >= moveInterval) {
+              ghost.moveTimer = 0;
               moveGhostAI(ghost);
+            } else {
+              // Try to continue, but if blocked, recalculate immediately
+              const prevTargetX = ghost.targetX;
+              const prevTargetY = ghost.targetY;
+              continueInCurrentDirection(ghost);
+              // If continueInCurrentDirection didn't change target, we're blocked - recalculate
+              if (ghost.targetX === prevTargetX && ghost.targetY === prevTargetY) {
+                moveGhostAI(ghost);
+              }
             }
           }
         }
@@ -510,11 +519,14 @@ function continueInCurrentDirection(ghost) {
 
 function getPossibleMoves(ghost) {
   const possibleMoves = [];
-  const isTunnelRow = ghost.y === TUNNEL_ROW;
+  // Use current grid position (ensure it's synced)
+  const currentX = ghost.x;
+  const currentY = ghost.y;
+  const isTunnelRow = currentY === TUNNEL_ROW;
 
   DIRECTIONS.forEach(({ dir, x: dx, y: dy }) => {
-    let newX = ghost.x + dx;
-    let newY = ghost.y + dy;
+    let newX = currentX + dx;
+    let newY = currentY + dy;
 
     // Handle wrap-around for tunnel row
     if (isTunnelRow) {
@@ -599,38 +611,36 @@ function determineBestMove(ghost, possibleMoves, targetPacman) {
 }
 
 function moveGhostAI(ghost) {
+  // Ensure grid position is synced before calculating moves
+  ghost.x = ghost.targetX;
+  ghost.y = ghost.targetY;
+
   // Find the target pacman (same color) - use current grid position
   const targetPacman = pacmen.find((p) => p && p.color === ghost.color);
-
-  if (!targetPacman) {
-    // No target, pick random move
-    const possibleMoves = getPossibleMoves(ghost);
-    if (possibleMoves.length > 0) {
-      const randomMove = possibleMoves[Math.floor(Math.random() * possibleMoves.length)];
-      ghost.targetX = randomMove.newX;
-      ghost.targetY = randomMove.newY;
-      ghost.lastDirX = randomMove.x;
-      ghost.lastDirY = randomMove.y;
-    }
-    return;
-  }
 
   // Get possible moves (avoiding walls and not turning around)
   const possibleMoves = getPossibleMoves(ghost);
 
   if (possibleMoves.length === 0) {
-    return; // No valid moves
+    // No valid moves - this shouldn't happen, but if it does, try to find any valid adjacent cell
+    console.warn(`Ghost at (${ghost.x}, ${ghost.y}) has no valid moves!`);
+    return;
   }
 
   let chosenMove;
 
-  // Use aiDifficulty as probability: if random < difficulty, choose best move, otherwise random
-  if (Math.random() < aiDifficulty) {
-    // Always chase when skill is high
-    chosenMove = determineBestMove(ghost, possibleMoves, targetPacman);
-  } else {
-    // Random move at lower skill levels
+  if (!targetPacman) {
+    // No target, pick random move
     chosenMove = possibleMoves[Math.floor(Math.random() * possibleMoves.length)];
+  } else {
+    // Use aiDifficulty as probability: if random < difficulty, choose best move, otherwise random
+    if (Math.random() < aiDifficulty) {
+      // Always chase when skill is high
+      chosenMove = determineBestMove(ghost, possibleMoves, targetPacman);
+    } else {
+      // Random move at lower skill levels
+      chosenMove = possibleMoves[Math.floor(Math.random() * possibleMoves.length)];
+    }
   }
 
   if (chosenMove) {
@@ -638,6 +648,13 @@ function moveGhostAI(ghost) {
     ghost.targetY = chosenMove.newY;
     ghost.lastDirX = chosenMove.x;
     ghost.lastDirY = chosenMove.y;
+  } else {
+    // Fallback: pick first available move
+    const fallbackMove = possibleMoves[0];
+    ghost.targetX = fallbackMove.newX;
+    ghost.targetY = fallbackMove.newY;
+    ghost.lastDirX = fallbackMove.x;
+    ghost.lastDirY = fallbackMove.y;
   }
 }
 
