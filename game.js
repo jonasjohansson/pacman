@@ -234,23 +234,31 @@ function handleServerMessage(data) {
       myPlayerId = data.playerId;
       console.log(`%cConnected as ${myPlayerId}`, "color: green; font-weight: bold;");
       break;
-    case "joined":
-      // Only process if we haven't already joined
-      if (!myCharacterType) {
-        myCharacterType = data.characterType;
-        myColorIndex = data.colorIndex;
-        window.autoJoinAttempted = false; // reset flag on successful join
-        console.log(`%cJoined as ${myCharacterType} color ${myColorIndex}`, "color: green; font-weight: bold;");
-        // Auto-select the character we joined as
-        if (myCharacterType === "pacman") {
-          selectCharacter("pacman", COLORS[myColorIndex].charAt(0).toUpperCase() + COLORS[myColorIndex].slice(1));
-        } else {
-          selectCharacter("ghost", COLORS[myColorIndex].charAt(0).toUpperCase() + COLORS[myColorIndex].slice(1));
-        }
-      } else {
+    case "joined": {
+      const newType = data.characterType;
+      const newColorIndex = data.colorIndex;
+
+      // If this joined message is identical to our current state, just log and ignore
+      if (myCharacterType === newType && myColorIndex === newColorIndex) {
         console.warn(`%cAlready joined as ${myCharacterType} color ${myColorIndex}, ignoring duplicate join`, "color: orange;");
+        break;
+      }
+
+      // Otherwise, accept the server as source of truth and update our local identity
+      myCharacterType = newType;
+      myColorIndex = newColorIndex;
+      window.autoJoinAttempted = false; // reset flag on successful join
+      console.log(`%cJoined as ${myCharacterType} color ${myColorIndex}`, "color: green; font-weight: bold;");
+
+      // Auto-select the character we joined as so the GUI and local selection match the server
+      const colorName = COLORS[myColorIndex].charAt(0).toUpperCase() + COLORS[myColorIndex].slice(1);
+      if (myCharacterType === "pacman") {
+        selectCharacter("pacman", colorName);
+      } else {
+        selectCharacter("ghost", colorName);
       }
       break;
+    }
     case "joinFailed":
       console.error(`%cJoin failed: ${data.reason}`, "color: red; font-weight: bold;");
       // allow auto-join to try again on next gameState
