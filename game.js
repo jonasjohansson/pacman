@@ -1,5 +1,5 @@
 // Simple Pacman Game
-// Map: 0 = path, 1 = wall, 2 = teleport
+// Map: 0 = path, 1 = wall, 2 = teleport, 3 = ghost spawn (treated as path for movement, just marks spawn location)
 const MAP = [
   [1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1],
   [1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1],
@@ -12,10 +12,10 @@ const MAP = [
   [1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1],
   [1, 1, 1, 1, 1, 1, 0, 1, 1, 1, 1, 1, 0, 1, 1, 0, 1, 1, 1, 1, 1, 0, 1, 1, 1, 1, 1, 1],
   [1, 1, 1, 1, 1, 1, 0, 1, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 1, 0, 1, 1, 1, 1, 1, 1],
-  [1, 1, 1, 1, 1, 1, 0, 1, 1, 0, 1, 1, 1, 1, 1, 1, 1, 1, 0, 1, 1, 0, 1, 1, 1, 1, 1, 1],
-  [1, 1, 1, 1, 1, 1, 0, 1, 1, 0, 1, 1, 1, 1, 1, 1, 1, 1, 0, 1, 1, 0, 1, 1, 1, 1, 1, 1],
-  [2, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 1, 1, 1, 1, 1, 1, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 2],
-  [1, 1, 1, 1, 1, 1, 0, 1, 1, 0, 1, 1, 1, 1, 1, 1, 1, 1, 0, 1, 1, 0, 1, 1, 1, 1, 1, 1],
+  [1, 1, 1, 1, 1, 1, 0, 1, 1, 0, 1, 1, 1, 0, 0, 1, 1, 1, 0, 1, 1, 0, 1, 1, 1, 1, 1, 1],
+  [1, 1, 1, 1, 1, 1, 0, 1, 1, 0, 1, 0, 0, 3, 3, 0, 0, 1, 0, 1, 1, 0, 1, 1, 1, 1, 1, 1],
+  [2, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 3, 3, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 2],
+  [1, 1, 1, 1, 1, 1, 0, 1, 1, 0, 1, 0, 0, 0, 0, 0, 0, 1, 0, 1, 1, 0, 1, 1, 1, 1, 1, 1],
   [1, 1, 1, 1, 1, 1, 0, 1, 1, 0, 1, 1, 1, 1, 1, 1, 1, 1, 0, 1, 1, 0, 1, 1, 1, 1, 1, 1],
   [1, 1, 1, 1, 1, 1, 0, 1, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 1, 0, 1, 1, 1, 1, 1, 1],
   [1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1],
@@ -59,6 +59,16 @@ for (let y = 0; y < ROWS; y++) {
   for (let x = 0; x < COLS; x++) {
     if (MAP[y][x] === 2) {
       teleportPositions.push({ x, y });
+    }
+  }
+}
+
+// Pre-calculate ghost spawn positions
+const ghostSpawnPositions = [];
+for (let y = 0; y < ROWS; y++) {
+  for (let x = 0; x < COLS; x++) {
+    if (MAP[y][x] === 3) {
+      ghostSpawnPositions.push({ x, y });
     }
   }
 }
@@ -107,12 +117,16 @@ function restartGame() {
   });
 
   ghosts.forEach((ghost, i) => {
-    const pos = [
-      { x: 11, y: 11 }, // top-left of cage
-      { x: 13, y: 11 }, // top-center of cage
-      { x: 15, y: 11 }, // top-right of cage
-      { x: 13, y: 16 }, // bottom-center of cage
-    ][i];
+    // Use spawn positions from map, or fallback to default positions
+    const pos =
+      i < ghostSpawnPositions.length
+        ? ghostSpawnPositions[i]
+        : [
+            { x: 11, y: 11 },
+            { x: 12, y: 11 },
+            { x: 13, y: 11 },
+            { x: 14, y: 11 },
+          ][i - ghostSpawnPositions.length] || { x: 13, y: 13 };
     ghost.x = pos.x;
     ghost.y = pos.y;
     ghost.px = pos.x * CELL_SIZE + CHARACTER_OFFSET;
@@ -122,7 +136,13 @@ function restartGame() {
     for (const dir of DIRECTIONS) {
       const newX = pos.x + dir.x;
       const newY = pos.y + dir.y;
-      if (newX >= 0 && newX < COLS && newY >= 0 && newY < ROWS && (MAP[newY][newX] === 0 || MAP[newY][newX] === 2)) {
+      if (
+        newX >= 0 &&
+        newX < COLS &&
+        newY >= 0 &&
+        newY < ROWS &&
+        (MAP[newY][newX] === 0 || MAP[newY][newX] === 2 || MAP[newY][newX] === 3)
+      ) {
         ghost.targetX = newX;
         ghost.targetY = newY;
         ghost.lastDirX = dir.x;
@@ -206,11 +226,20 @@ function init() {
   maze.style.width = COLS * CELL_SIZE + "px";
   maze.style.height = ROWS * CELL_SIZE + "px";
 
-  // Helper function to check if a cell is a path (0 or 2) - optimized
+  // Helper function to check if a cell is a path (0, 2, or 3) - optimized
+  // Note: 3 (spawn) is treated as a valid path for all movement purposes
   const isPath = (x, y) => {
     if (x < 0 || x >= COLS || y < 0 || y >= ROWS) return false;
     const cell = MAP[y][x];
-    return cell === 0 || cell === 2;
+    return cell === 0 || cell === 2 || cell === 3; // 3 is a valid path
+  };
+
+  // Helper function to check if a cell should create borders (only 0 and 2, not 3)
+  // This is separate from isPath because spawn positions (3) don't create visual borders
+  const shouldCreateBorder = (x, y) => {
+    if (x < 0 || x >= COLS || y < 0 || y >= ROWS) return false;
+    const cell = MAP[y][x];
+    return cell === 0 || cell === 2; // Exclude 3 (spawn positions don't create borders, but are still paths)
   };
 
   // Draw maze using document fragment for better performance
@@ -223,10 +252,10 @@ function init() {
 
       // For walls, check if they have any borders first
       if (cellType === 1) {
-        const hasPathTop = isPath(x, y - 1);
-        const hasPathRight = isPath(x + 1, y);
-        const hasPathBottom = isPath(x, y + 1);
-        const hasPathLeft = isPath(x - 1, y);
+        const hasPathTop = shouldCreateBorder(x, y - 1);
+        const hasPathRight = shouldCreateBorder(x + 1, y);
+        const hasPathBottom = shouldCreateBorder(x, y + 1);
+        const hasPathLeft = shouldCreateBorder(x - 1, y);
 
         // Skip walls that don't have any borders (completely surrounded by other walls)
         if (!hasPathTop && !hasPathRight && !hasPathBottom && !hasPathLeft) {
@@ -256,7 +285,8 @@ function init() {
         }
         fragment.appendChild(cell);
       } else {
-        // Create path or teleport div
+        // Create path, teleport, or spawn div (all rendered as paths/teleports)
+        // Note: 3 (spawn) is rendered as a regular path - it's just a spawn marker
         const cell = document.createElement("div");
         cell.className = "cell " + (cellType === 2 ? "teleport" : "path");
         cell.style.left = x * CELL_SIZE + "px";
@@ -294,14 +324,25 @@ function init() {
   // Set initial player (after pacmen are created)
   selectPacman("Red");
 
-  // Create 4 ghosts in the cage (rows 11-16, columns 9-18)
-  // The cage interior has paths at rows 11 and 16, columns 9-18
-  const ghostPositions = [
-    { x: 11, y: 11 }, // top-left of cage
-    { x: 13, y: 11 }, // top-center of cage
-    { x: 15, y: 11 }, // top-right of cage
-    { x: 13, y: 16 }, // bottom-center of cage
-  ];
+  // Create 4 ghosts at spawn positions (marked with 3 in the map)
+  // Use the pre-calculated ghost spawn positions
+  const ghostPositions = [];
+  for (let i = 0; i < 4 && i < ghostSpawnPositions.length; i++) {
+    ghostPositions.push(ghostSpawnPositions[i]);
+  }
+
+  // If there are fewer than 4 spawn positions, fill the rest with default positions
+  if (ghostPositions.length < 4) {
+    const defaultPositions = [
+      { x: 11, y: 11 },
+      { x: 12, y: 11 },
+      { x: 13, y: 11 },
+      { x: 14, y: 11 },
+    ];
+    for (let i = ghostPositions.length; i < 4; i++) {
+      ghostPositions.push(defaultPositions[i - ghostPositions.length]);
+    }
+  }
 
   ghostPositions.forEach((pos, i) => {
     // Give each ghost an initial direction to move
@@ -312,21 +353,37 @@ function init() {
       { x: 0, y: -1 }, // up
     ];
 
-    // Find a valid initial direction
+    // Find a valid initial direction - try all directions
     let initialTargetX = pos.x;
     let initialTargetY = pos.y;
     let initialDirX = 0;
     let initialDirY = 0;
+    const validMoves = [];
+
     for (const dir of initialDirections) {
       const newX = pos.x + dir.x;
       const newY = pos.y + dir.y;
-      if (newX >= 0 && newX < COLS && newY >= 0 && newY < ROWS && (MAP[newY][newX] === 0 || MAP[newY][newX] === 2)) {
-        initialTargetX = newX;
-        initialTargetY = newY;
-        initialDirX = dir.x;
-        initialDirY = dir.y;
-        break;
+      if (
+        newX >= 0 &&
+        newX < COLS &&
+        newY >= 0 &&
+        newY < ROWS &&
+        (MAP[newY][newX] === 0 || MAP[newY][newX] === 2 || MAP[newY][newX] === 3)
+      ) {
+        validMoves.push({ x: newX, y: newY, dirX: dir.x, dirY: dir.y });
       }
+    }
+
+    // If we found valid moves, use the first one
+    if (validMoves.length > 0) {
+      const move = validMoves[0];
+      initialTargetX = move.x;
+      initialTargetY = move.y;
+      initialDirX = move.dirX;
+      initialDirY = move.dirY;
+    } else {
+      // If no valid moves found, try to find any adjacent path (shouldn't happen, but safety check)
+      console.warn(`Ghost at (${pos.x}, ${pos.y}) has no valid initial moves!`);
     }
 
     const px = pos.x * CELL_SIZE + CHARACTER_OFFSET;
@@ -375,7 +432,13 @@ function init() {
         if (keys["ArrowDown"]) newY++;
 
         // Check if valid move
-        if (newX >= 0 && newX < COLS && newY >= 0 && newY < ROWS && (MAP[newY][newX] === 0 || MAP[newY][newX] === 2)) {
+        if (
+          newX >= 0 &&
+          newX < COLS &&
+          newY >= 0 &&
+          newY < ROWS &&
+          (MAP[newY][newX] === 0 || MAP[newY][newX] === 2 || MAP[newY][newX] === 3)
+        ) {
           pacman.targetX = newX;
           pacman.targetY = newY;
         }
@@ -403,8 +466,8 @@ function init() {
           ghost.x = ghost.targetX;
           ghost.y = ghost.targetY;
 
-          // If ghost has no direction stored, get a new one immediately
-          if (ghost.lastDirX === 0 && ghost.lastDirY === 0) {
+          // If ghost has no direction stored OR if target equals current position (stuck at spawn), get a new one immediately
+          if ((ghost.lastDirX === 0 && ghost.lastDirY === 0) || (ghost.targetX === ghost.x && ghost.targetY === ghost.y)) {
             moveGhostAI(ghost);
           } else {
             ghost.moveTimer += deltaTime;
@@ -506,7 +569,7 @@ function continueInCurrentDirection(ghost) {
 
   if (newX >= 0 && newX < COLS && newY >= 0 && newY < ROWS) {
     const cell = MAP[newY][newX];
-    if (cell === 0 || cell === 2) {
+    if (cell === 0 || cell === 2 || cell === 3) {
       ghost.targetX = newX;
       ghost.targetY = newY;
       return;
@@ -537,7 +600,7 @@ function getPossibleMoves(ghost) {
     // Check if valid move (not a wall)
     if (newX >= 0 && newX < COLS && newY >= 0 && newY < ROWS) {
       const cell = MAP[newY][newX];
-      if (cell === 0 || cell === 2) {
+      if (cell === 0 || cell === 2 || cell === 3) {
         possibleMoves.push({ dir, x: dx, y: dy, newX, newY });
       }
     }
