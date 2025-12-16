@@ -184,9 +184,9 @@ function selectCharacter(type, colorName) {
 
 // Initialize WebSocket connection
 function initWebSocket() {
-  // Use the deployed server address
-  const serverAddress = "http://localhost:3000";
-  // Convert https to wss for WebSocket
+  // Use the deployed Render server address
+  const serverAddress = "https://pacman-fiit.onrender.com";
+  // Convert http/https to ws/wss for WebSocket
   const wsUrl = serverAddress.replace("https://", "wss://").replace("http://", "ws://");
 
   try {
@@ -865,20 +865,62 @@ function init() {
     keys[e.key] = false;
   });
 
-  // Render loop - just updates visual positions based on server state
-  // Server sends pixel positions directly, so we just render what server says
+  // Render loop - smooths visual positions toward server state
+  // Server sends authoritative pixel positions; we interpolate for smoother motion
   function renderLoop() {
-    // Update visual positions for all characters (server is authoritative)
-    pacmen.forEach((pacman) => {
-      if (pacman && pacman.element) {
-        updatePosition(pacman.element, pacman.px, pacman.py);
+    // Smoothing factors
+    const OTHER_SMOOTHING = 0.25;
+    const MY_SMOOTHING = 0.4;
+    const SNAP_DISTANCE = 40; // pixels – snap if too far to avoid long slides
+
+    pacmen.forEach((pacman, index) => {
+      if (!pacman || !pacman.element) return;
+
+      const isMine = myCharacterType === "pacman" && myColorIndex === index;
+      const smoothing = isMine ? MY_SMOOTHING : OTHER_SMOOTHING;
+
+      if (pacman.renderX === undefined) {
+        pacman.renderX = pacman.px;
+        pacman.renderY = pacman.py;
+      } else {
+        const dx = pacman.px - pacman.renderX;
+        const dy = pacman.py - pacman.renderY;
+        const dist = Math.sqrt(dx * dx + dy * dy);
+        if (dist > SNAP_DISTANCE) {
+          pacman.renderX = pacman.px;
+          pacman.renderY = pacman.py;
+        } else {
+          pacman.renderX += dx * smoothing;
+          pacman.renderY += dy * smoothing;
+        }
       }
+
+      updatePosition(pacman.element, pacman.renderX, pacman.renderY);
     });
 
-    ghosts.forEach((ghost) => {
-      if (ghost && ghost.element) {
-        updatePosition(ghost.element, ghost.px, ghost.py);
+    ghosts.forEach((ghost, index) => {
+      if (!ghost || !ghost.element) return;
+
+      const isMine = myCharacterType === "ghost" && myColorIndex === index;
+      const smoothing = isMine ? MY_SMOOTHING : OTHER_SMOOTHING;
+
+      if (ghost.renderX === undefined) {
+        ghost.renderX = ghost.px;
+        ghost.renderY = ghost.py;
+      } else {
+        const dx = ghost.px - ghost.renderX;
+        const dy = ghost.py - ghost.renderY;
+        const dist = Math.sqrt(dx * dx + dy * dy);
+        if (dist > SNAP_DISTANCE) {
+          ghost.renderX = ghost.px;
+          ghost.renderY = ghost.py;
+        } else {
+          ghost.renderX += dx * smoothing;
+          ghost.renderY += dy * smoothing;
+        }
       }
+
+      updatePosition(ghost.element, ghost.renderX, ghost.renderY);
     });
 
     animationId = requestAnimationFrame(renderLoop);
