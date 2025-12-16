@@ -62,6 +62,58 @@ for (let y = 0; y < ROWS; y++) {
   }
 }
 
+// Pre-calculate pacman spawn positions
+const pacmanSpawnPositions = [
+  { x: 1, y: 1 }, // top-left
+  { x: 30, y: 1 }, // top-right
+  { x: 1, y: 14 }, // bottom-left
+  { x: 30, y: 14 }, // bottom-right
+];
+
+// Helper functions
+function isPath(x, y) {
+  if (x < 0 || x >= COLS || y < 0 || y >= ROWS) return false;
+  const cell = MAP[y][x];
+  return cell === 0 || cell === 2 || cell === 3;
+}
+
+function shouldCreateBorder(x, y) {
+  if (x < 0 || x >= COLS || y < 0 || y >= ROWS) return false;
+  const cell = MAP[y][x];
+  return cell === 0 || cell === 2;
+}
+
+function respawnCharacter(character, spawnPos) {
+  character.x = spawnPos.x;
+  character.y = spawnPos.y;
+  character.px = spawnPos.x * CELL_SIZE + CHARACTER_OFFSET;
+  character.py = spawnPos.y * CELL_SIZE + CHARACTER_OFFSET;
+  character.targetX = spawnPos.x;
+  character.targetY = spawnPos.y;
+  updatePosition(character.element, character.px, character.py);
+}
+
+function respawnGhost(ghost, spawnPos) {
+  respawnCharacter(ghost, spawnPos);
+  ghost.moveTimer = 0;
+  ghost.positionHistory = [];
+  ghost.lastDirX = 0;
+  ghost.lastDirY = 0;
+
+  // Find initial direction
+  for (const dir of DIRECTIONS) {
+    const newX = spawnPos.x + dir.x;
+    const newY = spawnPos.y + dir.y;
+    if (isPath(newX, newY)) {
+      ghost.targetX = newX;
+      ghost.targetY = newY;
+      ghost.lastDirX = dir.x;
+      ghost.lastDirY = dir.y;
+      break;
+    }
+  }
+}
+
 // Game state
 let pacmen = [];
 let ghosts = [];
@@ -69,8 +121,6 @@ let currentPacman = 0;
 let currentGhost = null; // null means controlling a pacman, otherwise index of controlled ghost
 let playerType = "pacman"; // "pacman" or "ghost"
 let aiDifficulty = 0.8; // 0 = easy, 1 = hard
-let pacmanSpeed = 1.0; // multiplier for pacman speed
-let ghostSpeed = 1.0; // multiplier for ghost speed
 let gameStarted = false;
 let lastTime = 0;
 let animationId = null;
@@ -92,61 +142,15 @@ function startGame() {
 function restartGame() {
   gameStarted = false;
   // Reset all characters to starting positions
-  pacmen.forEach((pacman, i) => {
-    const pos = [
-      { x: 1, y: 1 },
-      { x: 30, y: 1 },
-      { x: 1, y: 14 },
-      { x: 30, y: 14 },
-    ][i];
-    pacman.x = pos.x;
-    pacman.y = pos.y;
-    pacman.px = pos.x * CELL_SIZE + CHARACTER_OFFSET;
-    pacman.py = pos.y * CELL_SIZE + CHARACTER_OFFSET;
-    pacman.targetX = pos.x;
-    pacman.targetY = pos.y;
+  pacmen.forEach((pacman) => {
+    if (pacman && pacman.spawnPos) {
+      respawnCharacter(pacman, pacman.spawnPos);
+    }
   });
 
-  ghosts.forEach((ghost, i) => {
-    // Use spawn positions from map, or fallback to default positions
-    const pos =
-      i < ghostSpawnPositions.length
-        ? ghostSpawnPositions[i]
-        : [
-            { x: 11, y: 11 },
-            { x: 12, y: 11 },
-            { x: 13, y: 11 },
-            { x: 14, y: 11 },
-          ][i - ghostSpawnPositions.length] || { x: 13, y: 13 };
-    ghost.x = pos.x;
-    ghost.y = pos.y;
-    ghost.px = pos.x * CELL_SIZE + CHARACTER_OFFSET;
-    ghost.py = pos.y * CELL_SIZE + CHARACTER_OFFSET;
-
-    // Find initial direction
-    for (const dir of DIRECTIONS) {
-      const newX = pos.x + dir.x;
-      const newY = pos.y + dir.y;
-      if (
-        newX >= 0 &&
-        newX < COLS &&
-        newY >= 0 &&
-        newY < ROWS &&
-        (MAP[newY][newX] === 0 || MAP[newY][newX] === 2 || MAP[newY][newX] === 3)
-      ) {
-        ghost.targetX = newX;
-        ghost.targetY = newY;
-        ghost.lastDirX = dir.x;
-        ghost.lastDirY = dir.y;
-        break;
-      }
-    }
-    ghost.moveTimer = 0;
-    // Reset position history to prevent old history from affecting restarted game
-    if (!ghost.positionHistory) {
-      ghost.positionHistory = [];
-    } else {
-      ghost.positionHistory = [];
+  ghosts.forEach((ghost) => {
+    if (ghost && ghost.spawnPos) {
+      respawnGhost(ghost, ghost.spawnPos);
     }
   });
 
@@ -162,51 +166,25 @@ function restartGame() {
 
 function selectCharacter(type, colorName) {
   const colorIndex = COLORS.indexOf(colorName.toLowerCase());
+  if (colorIndex === -1) return;
 
-  if (type === "pacman") {
-    // Remove selected class from all characters
-    pacmen.forEach((pacman) => {
-      if (pacman && pacman.element) {
-        pacman.element.classList.remove("selected");
-      }
-    });
-    ghosts.forEach((ghost) => {
-      if (ghost && ghost.element) {
-        ghost.element.classList.remove("selected");
-      }
-    });
+  // Remove selected class from all characters
+  [...pacmen, ...ghosts].forEach((char) => {
+    if (char?.element) char.element.classList.remove("selected");
+  });
 
-    if (colorIndex !== -1 && pacmen[colorIndex]) {
-      currentPacman = colorIndex;
-      currentGhost = null;
-      playerType = "pacman";
-      if (pacmen[colorIndex] && pacmen[colorIndex].element) {
-        pacmen[colorIndex].element.classList.add("selected");
-      }
-      console.log(`%cNow controlling ${colorName} pacman`, `color: ${COLORS[colorIndex]}; font-weight: bold;`);
-    }
-  } else if (type === "ghost") {
-    // Remove selected class from all characters
-    pacmen.forEach((pacman) => {
-      if (pacman && pacman.element) {
-        pacman.element.classList.remove("selected");
-      }
-    });
-    ghosts.forEach((ghost) => {
-      if (ghost && ghost.element) {
-        ghost.element.classList.remove("selected");
-      }
-    });
-
-    if (colorIndex !== -1 && ghosts[colorIndex]) {
-      currentGhost = colorIndex;
-      currentPacman = 0; // Reset pacman selection
-      playerType = "ghost";
-      if (ghosts[colorIndex] && ghosts[colorIndex].element) {
-        ghosts[colorIndex].element.classList.add("selected");
-      }
-      console.log(`%cNow controlling ${colorName} ghost`, `color: ${COLORS[colorIndex]}; font-weight: bold;`);
-    }
+  if (type === "pacman" && pacmen[colorIndex]) {
+    currentPacman = colorIndex;
+    currentGhost = null;
+    playerType = "pacman";
+    pacmen[colorIndex].element?.classList.add("selected");
+    console.log(`%cNow controlling ${colorName} pacman`, `color: ${COLORS[colorIndex]}; font-weight: bold;`);
+  } else if (type === "ghost" && ghosts[colorIndex]) {
+    currentGhost = colorIndex;
+    currentPacman = 0;
+    playerType = "ghost";
+    ghosts[colorIndex].element?.classList.add("selected");
+    console.log(`%cNow controlling ${colorName} ghost`, `color: ${COLORS[colorIndex]}; font-weight: bold;`);
   }
 }
 
@@ -223,8 +201,6 @@ function init() {
       difficulty: 0.8,
       playerType: "Pacman",
       playerColor: "Red",
-      pacmanSpeed: 1.0,
-      ghostSpeed: 1.0,
       borderStyle: "double",
       borderColor: "#ffffff",
       pathBgColor: "#000000",
@@ -233,90 +209,68 @@ function init() {
       restart: () => restartGame(),
     };
 
-    gui.add(guiParams, "start").name("Start");
-    gui.add(guiParams, "restart").name("Restart");
-    gui
+    // Main controls folder - kept open
+    const controlsFolder = gui.addFolder("Controls");
+
+    controlsFolder.add(guiParams, "start").name("Start");
+    controlsFolder.add(guiParams, "restart").name("Restart");
+    controlsFolder
       .add(guiParams, "playerType", ["Pacman", "Ghost"])
       .name("Control")
       .onChange((value) => {
         const type = value.toLowerCase();
         selectCharacter(type, guiParams.playerColor);
       });
-    gui
+    controlsFolder
       .add(guiParams, "playerColor", ["Red", "Green", "Blue", "Yellow"])
       .name("Color")
       .onChange((value) => {
         selectCharacter(guiParams.playerType.toLowerCase(), value);
       });
 
-    gui
+    controlsFolder
       .add(guiParams, "difficulty", 0, 1, 0.1)
       .name("AI Skill")
       .onChange((value) => {
         aiDifficulty = value;
       });
-    gui
-      .add(guiParams, "pacmanSpeed", 0.1, 3, 0.1)
-      .name("Pacman Speed")
-      .onChange((value) => {
-        pacmanSpeed = value;
-      });
-    gui
-      .add(guiParams, "ghostSpeed", 0.1, 3, 0.1)
-      .name("Ghost Speed")
-      .onChange((value) => {
-        ghostSpeed = value;
-      });
 
-    // Visual settings
-    gui
+    // Visual settings folder - closed by default
+    const visualFolder = controlsFolder.addFolder("Visual Settings");
+    visualFolder
       .add(guiParams, "borderStyle", ["solid", "dashed", "dotted", "double"])
       .name("Border Style")
       .onChange((value) => {
         document.documentElement.style.setProperty("--border-style", value);
       });
 
-    gui
+    visualFolder
       .addColor(guiParams, "borderColor")
       .name("Border Color")
       .onChange((value) => {
         document.documentElement.style.setProperty("--color-wall-border", value);
       });
 
-    gui
+    visualFolder
       .addColor(guiParams, "pathBgColor")
       .name("Path Background")
       .onChange((value) => {
         document.documentElement.style.setProperty("--color-path-bg", value);
       });
 
-    gui
+    visualFolder
       .addColor(guiParams, "wallBgColor")
       .name("Wall Background")
       .onChange((value) => {
         document.documentElement.style.setProperty("--color-wall-bg", value);
       });
+
+    // Close visual settings folder by default
+    visualFolder.close();
   }
   const maze = document.getElementById("maze");
-  // Sizes already set in updateSizes(), but ensure they're correct
   maze.style.width = COLS * CELL_SIZE + "px";
   maze.style.height = ROWS * CELL_SIZE + "px";
-
-  // Helper function to check if a cell is a path (0, 2, or 3) - optimized
-  // Note: 3 (spawn) is treated as a valid path for all movement purposes
-  const isPath = (x, y) => {
-    if (x < 0 || x >= COLS || y < 0 || y >= ROWS) return false;
-    const cell = MAP[y][x];
-    return cell === 0 || cell === 2 || cell === 3; // 3 is a valid path
-  };
-
-  // Helper function to check if a cell should create borders (only 0 and 2, not 3)
-  // This is separate from isPath because spawn positions (3) don't create visual borders
-  const shouldCreateBorder = (x, y) => {
-    if (x < 0 || x >= COLS || y < 0 || y >= ROWS) return false;
-    const cell = MAP[y][x];
-    return cell === 0 || cell === 2; // Exclude 3 (spawn positions don't create borders, but are still paths)
-  };
 
   // Draw maze using document fragment for better performance
   // Only create divs for paths, teleports, and walls that have borders
@@ -386,15 +340,8 @@ function init() {
   }
   maze.appendChild(fragment);
 
-  // Create 4 pacmen in corners (map is 32 columns wide, 16 rows high)
-  const pacmanPositions = [
-    { x: 1, y: 1 }, // top-left
-    { x: 30, y: 1 }, // top-right (32 - 2)
-    { x: 1, y: 14 }, // bottom-left (16 - 2)
-    { x: 30, y: 14 }, // bottom-right
-  ];
-
-  pacmanPositions.forEach((pos, i) => {
+  // Create 4 pacmen in corners
+  pacmanSpawnPositions.forEach((pos, i) => {
     const px = pos.x * CELL_SIZE + CHARACTER_OFFSET;
     const py = pos.y * CELL_SIZE + CHARACTER_OFFSET;
     const pacman = {
@@ -405,9 +352,13 @@ function init() {
       targetX: pos.x,
       targetY: pos.y,
       color: COLORS[i],
+      speed: 1.0, // Individual speed multiplier
+      image: "", // Individual image URL
+      spawnPos: { ...pos },
       element: createCharacter("pacman", COLORS[i], pos.x, pos.y),
     };
     pacmen.push(pacman);
+    updateCharacterAppearance(pacman);
   });
 
   // Set initial player (after pacmen are created)
@@ -420,63 +371,39 @@ function init() {
     ghostPositions.push(ghostSpawnPositions[i]);
   }
 
-  // If there are fewer than 4 spawn positions, fill the rest with default positions
-  if (ghostPositions.length < 4) {
-    const defaultPositions = [
-      { x: 11, y: 11 },
-      { x: 12, y: 11 },
-      { x: 13, y: 11 },
-      { x: 14, y: 11 },
-    ];
-    for (let i = ghostPositions.length; i < 4; i++) {
-      ghostPositions.push(defaultPositions[i - ghostPositions.length]);
-    }
+  // Fill remaining positions if needed
+  const defaultPositions = [
+    { x: 11, y: 11 },
+    { x: 12, y: 11 },
+    { x: 13, y: 11 },
+    { x: 14, y: 11 },
+  ];
+  for (let i = ghostPositions.length; i < 4; i++) {
+    ghostPositions.push(defaultPositions[i - ghostPositions.length]);
   }
 
   ghostPositions.forEach((pos, i) => {
-    // Give each ghost an initial direction to move
-    const initialDirections = [
-      { x: 1, y: 0 }, // right
-      { x: -1, y: 0 }, // left
-      { x: 0, y: 1 }, // down
-      { x: 0, y: -1 }, // up
-    ];
+    const px = pos.x * CELL_SIZE + CHARACTER_OFFSET;
+    const py = pos.y * CELL_SIZE + CHARACTER_OFFSET;
 
-    // Find a valid initial direction - try all directions
+    // Find initial direction
     let initialTargetX = pos.x;
     let initialTargetY = pos.y;
     let initialDirX = 0;
     let initialDirY = 0;
-    const validMoves = [];
 
-    for (const dir of initialDirections) {
+    for (const dir of DIRECTIONS) {
       const newX = pos.x + dir.x;
       const newY = pos.y + dir.y;
-      if (
-        newX >= 0 &&
-        newX < COLS &&
-        newY >= 0 &&
-        newY < ROWS &&
-        (MAP[newY][newX] === 0 || MAP[newY][newX] === 2 || MAP[newY][newX] === 3)
-      ) {
-        validMoves.push({ x: newX, y: newY, dirX: dir.x, dirY: dir.y });
+      if (isPath(newX, newY)) {
+        initialTargetX = newX;
+        initialTargetY = newY;
+        initialDirX = dir.x;
+        initialDirY = dir.y;
+        break;
       }
     }
 
-    // If we found valid moves, use the first one
-    if (validMoves.length > 0) {
-      const move = validMoves[0];
-      initialTargetX = move.x;
-      initialTargetY = move.y;
-      initialDirX = move.dirX;
-      initialDirY = move.dirY;
-    } else {
-      // If no valid moves found, try to find any adjacent path (shouldn't happen, but safety check)
-      console.warn(`Ghost at (${pos.x}, ${pos.y}) has no valid initial moves!`);
-    }
-
-    const px = pos.x * CELL_SIZE + CHARACTER_OFFSET;
-    const py = pos.y * CELL_SIZE + CHARACTER_OFFSET;
     const ghost = {
       x: pos.x,
       y: pos.y,
@@ -485,15 +412,98 @@ function init() {
       targetX: initialTargetX,
       targetY: initialTargetY,
       color: COLORS[i],
+      speed: 1.0,
+      image: "",
+      spawnPos: { ...pos },
       element: createCharacter("ghost", COLORS[i], pos.x, pos.y),
       moveTimer: 0,
       lastDirX: initialDirX,
       lastDirY: initialDirY,
-      positionHistory: [], // Track recent positions to avoid loops
-      lastDecisionTime: 0, // Track when last decision was made
+      positionHistory: [],
     };
     ghosts.push(ghost);
+    updateCharacterAppearance(ghost);
   });
+
+  // Add individual character controls to GUI after characters are created
+  // Colors are paired - changing one updates both pacman and ghost
+  if (gui) {
+    // Create color pair objects that sync both characters
+    const colorPairs = COLORS.map((color, i) => {
+      const colorName = color.charAt(0).toUpperCase() + color.slice(1);
+      return {
+        name: colorName,
+        pacman: pacmen[i],
+        ghost: ghosts[i],
+        color: COLORS[i], // Shared color property - synced between pair
+        pacmanSpeed: 1.0,
+        ghostSpeed: 1.0,
+        pacmanImage: "",
+        ghostImage: "",
+      };
+    });
+
+    // Create folders for each color pair
+    COLORS.forEach((color, i) => {
+      if (!pacmen[i] || !ghosts[i]) return;
+      const pair = colorPairs[i];
+      const colorName = color.charAt(0).toUpperCase() + color.slice(1);
+      const pairFolder = gui.addFolder(`${colorName} Pair`);
+
+      // Shared color control - updates both characters together
+      pairFolder
+        .addColor(pair, "color")
+        .name("Color")
+        .onChange((value) => {
+          // Update both characters with the same color
+          pair.pacman.color = value;
+          pair.ghost.color = value;
+          updateCharacterAppearance(pair.pacman);
+          updateCharacterAppearance(pair.ghost);
+        });
+
+      // Individual speeds
+      pairFolder
+        .add(pair, "pacmanSpeed", 0.1, 3, 0.1)
+        .name("Pacman Speed")
+        .onChange((value) => {
+          pair.pacman.speed = value;
+        });
+
+      pairFolder
+        .add(pair, "ghostSpeed", 0.1, 3, 0.1)
+        .name("Ghost Speed")
+        .onChange((value) => {
+          pair.ghost.speed = value;
+        });
+
+      // Individual images
+      pairFolder
+        .add(pair, "pacmanImage")
+        .name("Pacman Image URL")
+        .onChange((value) => {
+          pair.pacman.image = value;
+          updateCharacterAppearance(pair.pacman);
+        });
+
+      pairFolder
+        .add(pair, "ghostImage")
+        .name("Ghost Image URL")
+        .onChange((value) => {
+          pair.ghost.image = value;
+          updateCharacterAppearance(pair.ghost);
+        });
+
+      // Initialize values from characters
+      pair.pacmanSpeed = pair.pacman.speed;
+      pair.ghostSpeed = pair.ghost.speed;
+      pair.pacmanImage = pair.pacman.image;
+      pair.ghostImage = pair.ghost.image;
+
+      // Close the folder by default
+      pairFolder.close();
+    });
+  }
 
   // Keyboard controls
   const keys = {};
@@ -530,13 +540,7 @@ function init() {
           }
 
           // Check if valid move
-          if (
-            newX >= 0 &&
-            newX < COLS &&
-            newY >= 0 &&
-            newY < ROWS &&
-            (MAP[newY][newX] === 0 || MAP[newY][newX] === 2 || MAP[newY][newX] === 3)
-          ) {
+          if (newX >= 0 && newX < COLS && newY >= 0 && newY < ROWS && isPath(newX, newY)) {
             pacman.targetX = newX;
             pacman.targetY = newY;
           }
@@ -559,16 +563,10 @@ function init() {
           }
 
           // Check if valid move
-          if (
-            newX >= 0 &&
-            newX < COLS &&
-            newY >= 0 &&
-            newY < ROWS &&
-            (MAP[newY][newX] === 0 || MAP[newY][newX] === 2 || MAP[newY][newX] === 3)
-          ) {
+          if (newX >= 0 && newX < COLS && newY >= 0 && newY < ROWS && isPath(newX, newY)) {
             ghost.targetX = newX;
             ghost.targetY = newY;
-            // Update direction for smooth movement (normalize to -1, 0, or 1)
+            // Update direction for smooth movement
             const dx = newX - ghost.x;
             const dy = newY - ghost.y;
             ghost.lastDirX = dx === 0 ? 0 : dx > 0 ? 1 : -1;
@@ -577,19 +575,23 @@ function init() {
         }
       }
 
-      // Move characters smoothly
-      if (playerType === "pacman") {
-        moveCharacter(pacmen[currentPacman], pacmanSpeed);
-      } else if (playerType === "ghost" && currentGhost !== null) {
-        moveCharacter(ghosts[currentGhost], ghostSpeed);
+      // Move characters smoothly using individual speeds
+      if (playerType === "pacman" && pacmen[currentPacman]) {
+        moveCharacter(pacmen[currentPacman], pacmen[currentPacman].speed);
+      } else if (playerType === "ghost" && currentGhost !== null && ghosts[currentGhost]) {
+        moveCharacter(ghosts[currentGhost], ghosts[currentGhost].speed);
       }
+
+      // Move all pacmen (skip player-controlled, already moved above)
+      pacmen.forEach((pacman, index) => {
+        if (playerType === "pacman" && index === currentPacman) return;
+        if (pacman) moveCharacter(pacman, pacman.speed);
+      });
 
       // Move ghosts (skip player-controlled ghost, already moved above)
       ghosts.forEach((ghost, index) => {
-        if (playerType === "ghost" && index === currentGhost) {
-          return; // Already moved above
-        }
-        moveCharacter(ghost, ghostSpeed);
+        if (playerType === "ghost" && index === currentGhost) return;
+        if (ghost) moveCharacter(ghost, ghost.speed);
       });
     } else {
       // Game not started, just draw characters in place
@@ -611,24 +613,20 @@ function init() {
           ghost.x = ghost.targetX;
           ghost.y = ghost.targetY;
 
-          // If ghost has no direction stored OR if target equals current position (stuck at spawn), get a new one immediately
+          // If stuck or no direction, get new direction immediately
           if ((ghost.lastDirX === 0 && ghost.lastDirY === 0) || (ghost.targetX === ghost.x && ghost.targetY === ghost.y)) {
             moveGhostAI(ghost);
           } else {
             ghost.moveTimer += deltaTime;
-            // Faster decisions at higher difficulty, but always make decisions when at target
             const moveInterval = Math.max(50, 300 - aiDifficulty * 250);
 
-            // Always recalculate if timer expired, or if we can't continue in current direction
             if (ghost.moveTimer >= moveInterval) {
               ghost.moveTimer = 0;
               moveGhostAI(ghost);
             } else {
-              // Try to continue, but if blocked, recalculate immediately
               const prevTargetX = ghost.targetX;
               const prevTargetY = ghost.targetY;
               continueInCurrentDirection(ghost);
-              // If continueInCurrentDirection didn't change target, we're blocked - recalculate
               if (ghost.targetX === prevTargetX && ghost.targetY === prevTargetY) {
                 moveGhostAI(ghost);
               }
@@ -651,20 +649,23 @@ function init() {
 }
 
 function isAtTarget(character) {
-  const targetPx = character.targetX * CELL_SIZE + CHARACTER_OFFSET;
-  const targetPy = character.targetY * CELL_SIZE + CHARACTER_OFFSET;
-  return Math.abs(character.px - targetPx) < 0.5 && Math.abs(character.py - targetPy) < 0.5;
+  const target = getTargetPixelPos(character.targetX, character.targetY);
+  return Math.abs(character.px - target.x) < 0.5 && Math.abs(character.py - target.y) < 0.5;
+}
+
+function getTargetPixelPos(gridX, gridY) {
+  return {
+    x: gridX * CELL_SIZE + CHARACTER_OFFSET,
+    y: gridY * CELL_SIZE + CHARACTER_OFFSET,
+  };
 }
 
 function moveCharacter(character, speedMultiplier = 1.0) {
   if (!character) return;
 
-  const targetPx = character.targetX * CELL_SIZE + CHARACTER_OFFSET;
-  const targetPy = character.targetY * CELL_SIZE + CHARACTER_OFFSET;
-
-  // Smooth interpolation
-  const dx = targetPx - character.px;
-  const dy = targetPy - character.py;
+  const target = getTargetPixelPos(character.targetX, character.targetY);
+  const dx = target.x - character.px;
+  const dy = target.y - character.py;
   const distance = Math.sqrt(dx * dx + dy * dy);
 
   if (distance > 0.5) {
@@ -673,12 +674,10 @@ function moveCharacter(character, speedMultiplier = 1.0) {
       character.px += (dx / distance) * moveDistance;
       character.py += (dy / distance) * moveDistance;
     } else {
-      character.px = targetPx;
-      character.py = targetPy;
+      character.px = target.x;
+      character.py = target.y;
       character.x = character.targetX;
       character.y = character.targetY;
-
-      // Check for teleport
       if (MAP[character.y][character.x] === 2) {
         teleportCharacter(character);
       }
@@ -689,15 +688,15 @@ function moveCharacter(character, speedMultiplier = 1.0) {
 }
 
 function teleportCharacter(character) {
-  // Find the other teleport position
   const otherTeleport = teleportPositions.find((pos) => pos.x !== character.x || pos.y !== character.y);
   if (otherTeleport) {
     character.x = otherTeleport.x;
     character.y = otherTeleport.y;
     character.targetX = otherTeleport.x;
     character.targetY = otherTeleport.y;
-    character.px = otherTeleport.x * CELL_SIZE + CHARACTER_OFFSET;
-    character.py = otherTeleport.y * CELL_SIZE + CHARACTER_OFFSET;
+    const pos = getTargetPixelPos(otherTeleport.x, otherTeleport.y);
+    character.px = pos.x;
+    character.py = pos.y;
   }
 }
 
@@ -712,13 +711,10 @@ function continueInCurrentDirection(ghost) {
     else if (newX >= COLS) newX = 0;
   }
 
-  if (newX >= 0 && newX < COLS && newY >= 0 && newY < ROWS) {
-    const cell = MAP[newY][newX];
-    if (cell === 0 || cell === 2 || cell === 3) {
-      ghost.targetX = newX;
-      ghost.targetY = newY;
-      return;
-    }
+  if (newX >= 0 && newX < COLS && newY >= 0 && newY < ROWS && isPath(newX, newY)) {
+    ghost.targetX = newX;
+    ghost.targetY = newY;
+    return;
   }
 
   // If can't continue, pick a new direction immediately
@@ -742,12 +738,9 @@ function getPossibleMoves(ghost) {
       else if (newX >= COLS) newX = 0;
     }
 
-    // Check if valid move (not a wall)
-    if (newX >= 0 && newX < COLS && newY >= 0 && newY < ROWS) {
-      const cell = MAP[newY][newX];
-      if (cell === 0 || cell === 2 || cell === 3) {
-        possibleMoves.push({ dir, x: dx, y: dy, newX, newY });
-      }
+    // Check if valid move
+    if (newX >= 0 && newX < COLS && newY >= 0 && newY < ROWS && isPath(newX, newY)) {
+      possibleMoves.push({ dir, x: dx, y: dy, newX, newY });
     }
   });
 
@@ -779,25 +772,14 @@ function getPossibleMoves(ghost) {
     filteredMoves = possibleMoves;
   }
 
-  // Filter out moves that would take us to recently visited positions (prevent loops)
-  // Keep only last 4 positions in history to avoid short loops
-  if (ghost.positionHistory && ghost.positionHistory.length > 0) {
-    const recentPositions = ghost.positionHistory.slice(-4); // Last 4 positions
-    filteredMoves = filteredMoves.filter((move) => {
-      return !recentPositions.some((pos) => pos.x === move.newX && pos.y === move.newY);
-    });
-
-    // If filtering removed all moves, allow revisiting (better than being stuck)
-    if (filteredMoves.length === 0) {
-      filteredMoves = possibleMoves;
-    }
+  // Filter out recently visited positions to prevent loops
+  if (ghost.positionHistory?.length > 0) {
+    const recentPositions = ghost.positionHistory.slice(-4);
+    filteredMoves = filteredMoves.filter((move) => !recentPositions.some((pos) => pos.x === move.newX && pos.y === move.newY));
+    if (filteredMoves.length === 0) filteredMoves = possibleMoves;
   }
 
   return filteredMoves;
-}
-
-function calculateDistance(pos1, pos2) {
-  return Math.sqrt(Math.pow(pos1.x - pos2.x, 2) + Math.pow(pos1.y - pos2.y, 2));
 }
 
 function calculateDistanceWithWrap(pos1, pos2) {
@@ -847,7 +829,7 @@ function determineBestMove(ghost, possibleMoves, targetPacman) {
     // Prefer moves that get us closer to target
     const currentDistance = calculateDistanceWithWrap({ x: ghost.x, y: ghost.y }, targetPos);
     if (distance < currentDistance) {
-      score += 1.0; // Bonus for getting closer
+      score += 1.0;
     }
 
     if (score > bestScore) {
@@ -860,22 +842,14 @@ function determineBestMove(ghost, possibleMoves, targetPacman) {
 }
 
 function moveGhostAI(ghost) {
-  // Ensure grid position is synced before calculating moves
+  // Sync grid position
   ghost.x = ghost.targetX;
   ghost.y = ghost.targetY;
 
   // Update position history to prevent loops
-  if (!ghost.positionHistory) {
-    ghost.positionHistory = [];
-  }
-
-  // Add current position to history
+  if (!ghost.positionHistory) ghost.positionHistory = [];
   ghost.positionHistory.push({ x: ghost.x, y: ghost.y });
-
-  // Keep only last 6 positions to prevent loops
-  if (ghost.positionHistory.length > 6) {
-    ghost.positionHistory.shift();
-  }
+  if (ghost.positionHistory.length > 6) ghost.positionHistory.shift();
 
   // Find the target pacman (same color) - use current grid position
   const targetPacman = pacmen.find((p) => p && p.color === ghost.color);
@@ -884,35 +858,24 @@ function moveGhostAI(ghost) {
   const possibleMoves = getPossibleMoves(ghost);
 
   if (possibleMoves.length === 0) {
-    // No valid moves - this shouldn't happen, but if it does, try to find any valid adjacent cell
     console.warn(`Ghost at (${ghost.x}, ${ghost.y}) has no valid moves!`);
-    // Clear history to allow escape
     ghost.positionHistory = [];
     return;
   }
 
-  let chosenMove;
-
-  if (!targetPacman) {
-    // No target, pick random move (but avoid recent positions)
-    chosenMove = possibleMoves[Math.floor(Math.random() * possibleMoves.length)];
-  } else {
-    // Use aiDifficulty as probability: if random < difficulty, choose best move, otherwise random
-    if (Math.random() < aiDifficulty) {
-      // Always chase when skill is high
-      chosenMove = determineBestMove(ghost, possibleMoves, targetPacman);
-    } else {
-      // Random move at lower skill levels, but still prefer moves that don't revisit
-      const nonRecentMoves = possibleMoves.filter((move) => {
-        if (!ghost.positionHistory || ghost.positionHistory.length === 0) return true;
-        const recent = ghost.positionHistory.slice(-2);
-        return !recent.some((pos) => pos.x === move.newX && pos.y === move.newY);
-      });
-
-      const movesToChooseFrom = nonRecentMoves.length > 0 ? nonRecentMoves : possibleMoves;
-      chosenMove = movesToChooseFrom[Math.floor(Math.random() * movesToChooseFrom.length)];
-    }
-  }
+  const chosenMove = !targetPacman
+    ? possibleMoves[Math.floor(Math.random() * possibleMoves.length)]
+    : Math.random() < aiDifficulty
+    ? determineBestMove(ghost, possibleMoves, targetPacman)
+    : (() => {
+        const nonRecentMoves = possibleMoves.filter((move) => {
+          if (!ghost.positionHistory?.length) return true;
+          const recent = ghost.positionHistory.slice(-2);
+          return !recent.some((pos) => pos.x === move.newX && pos.y === move.newY);
+        });
+        const movesToChooseFrom = nonRecentMoves.length > 0 ? nonRecentMoves : possibleMoves;
+        return movesToChooseFrom[Math.floor(Math.random() * movesToChooseFrom.length)];
+      })();
 
   if (chosenMove) {
     ghost.targetX = chosenMove.newX;
@@ -920,21 +883,74 @@ function moveGhostAI(ghost) {
     ghost.lastDirX = chosenMove.x;
     ghost.lastDirY = chosenMove.y;
   } else {
-    // Fallback: pick first available move
-    const fallbackMove = possibleMoves[0];
-    ghost.targetX = fallbackMove.newX;
-    ghost.targetY = fallbackMove.newY;
-    ghost.lastDirX = fallbackMove.x;
-    ghost.lastDirY = fallbackMove.y;
+    const fallback = possibleMoves[0];
+    ghost.targetX = fallback.newX;
+    ghost.targetY = fallback.newY;
+    ghost.lastDirX = fallback.x;
+    ghost.lastDirY = fallback.y;
   }
 }
 
 function createCharacter(type, color, x, y) {
   const el = document.createElement("div");
-  el.className = `${type} ${color}`;
+  el.className = type;
   updatePosition(el, x * CELL_SIZE + CHARACTER_OFFSET, y * CELL_SIZE + CHARACTER_OFFSET);
   document.getElementById("maze").appendChild(el);
   return el;
+}
+
+function updateCharacterAppearance(character) {
+  if (!character || !character.element) return;
+
+  const el = character.element;
+  const isPacman = el.classList.contains("pacman");
+  const isGhost = el.classList.contains("ghost");
+
+  // Remove old color classes
+  COLORS.forEach((c) => el.classList.remove(c));
+
+  // Update color
+  if (character.color) {
+    const colorLower = character.color.toLowerCase();
+    // Check if it's a predefined color name
+    if (COLORS.includes(colorLower)) {
+      el.classList.add(colorLower);
+      // Clear inline styles for predefined colors
+      if (isPacman) el.style.background = "";
+      if (isGhost) el.style.borderColor = "";
+    } else {
+      // Custom color (hex or CSS color) - apply directly via style
+      if (isPacman) {
+        el.style.background = character.color;
+      } else if (isGhost) {
+        el.style.borderColor = character.color;
+      }
+    }
+  }
+
+  // Update image
+  if (character.image && character.image.trim() !== "") {
+    if (isPacman) {
+      el.style.backgroundImage = `url(${character.image})`;
+      el.style.backgroundSize = "cover";
+      el.style.backgroundPosition = "center";
+      el.style.backgroundRepeat = "no-repeat";
+      // If custom color, use it as fallback
+      if (character.color && !COLORS.includes(character.color.toLowerCase())) {
+        el.style.backgroundColor = character.color;
+      }
+    } else if (isGhost) {
+      el.style.backgroundImage = `url(${character.image})`;
+      el.style.backgroundSize = "cover";
+      el.style.backgroundPosition = "center";
+      el.style.backgroundRepeat = "no-repeat";
+    }
+  } else {
+    el.style.backgroundImage = "";
+    el.style.backgroundSize = "";
+    el.style.backgroundPosition = "";
+    el.style.backgroundRepeat = "";
+  }
 }
 
 function updatePosition(element, px, py) {
@@ -943,18 +959,129 @@ function updatePosition(element, px, py) {
 }
 
 function checkCollisions() {
-  pacmen.forEach((pacman, i) => {
-    ghosts.forEach((ghost, j) => {
-      // Check if they're on the same grid position
-      if (pacman && ghost && pacman.color === ghost.color && pacman.x === ghost.x && pacman.y === ghost.y) {
-        console.log(`${pacman.color} ghost caught ${pacman.color} pacman!`);
-        // Remove both
-        pacman.element.remove();
-        ghost.element.remove();
-        pacmen.splice(i, 1);
-        ghosts.splice(j, 1);
+  pacmen.forEach((pacman) => {
+    if (!pacman) return;
+    ghosts.forEach((ghost) => {
+      if (!ghost) return;
+      // Check if they're on the same grid position and same color
+      if (pacman.color === ghost.color && pacman.x === ghost.x && pacman.y === ghost.y) {
+        console.log(`%c${pacman.color} ghost caught ${pacman.color} pacman! Respawned.`, `color: ${pacman.color}; font-weight: bold;`);
+        // Respawn both characters
+        if (pacman.spawnPos) {
+          respawnCharacter(pacman, pacman.spawnPos);
+        }
+        if (ghost.spawnPos) {
+          respawnGhost(ghost, ghost.spawnPos);
+        }
       }
     });
+  });
+}
+
+// Handle "Enter the Dome" button click
+function setupDomeEntry() {
+  // Try multiple selectors to find the enter button
+  const enterButtonSelectors = ["#enter-dome-button", ".enter-dome-button", "button[data-enter-dome]", "[data-enter-dome]"];
+
+  let enterButton = null;
+  for (const selector of enterButtonSelectors) {
+    try {
+      enterButton = document.querySelector(selector);
+      if (enterButton) break;
+    } catch (e) {
+      // Invalid selector, try next
+    }
+  }
+
+  // Also try finding by text content
+  if (!enterButton) {
+    const buttons = document.querySelectorAll('button, a, [role="button"]');
+    buttons.forEach((btn) => {
+      const text = btn.textContent?.toLowerCase() || "";
+      if (text.includes("enter") && text.includes("dome")) {
+        enterButton = btn;
+      }
+    });
+  }
+
+  if (enterButton) {
+    enterButton.addEventListener("click", (e) => {
+      e.preventDefault();
+
+      // Fade out signup elements
+      const signupSelectors = ["#signup", ".signup", "[data-signup]"];
+      signupSelectors.forEach((sel) => {
+        const elements = document.querySelectorAll(sel);
+        elements.forEach((el) => el.classList.add("fade-out"));
+      });
+
+      // Fade out "try out the dome" text
+      const tryOutSelectors = ["#try-out-dome", ".try-out-dome", "[data-try-out]"];
+      tryOutSelectors.forEach((sel) => {
+        const elements = document.querySelectorAll(sel);
+        elements.forEach((el) => el.classList.add("fade-out"));
+      });
+
+      // Fade out the enter button itself
+      enterButton.classList.add("fade-out");
+
+      // Make canvas full viewport height
+      const canvas = document.getElementById("webgl-canvas");
+      if (canvas) {
+        canvas.classList.add("full-height");
+        canvas.style.height = "100vh";
+      }
+
+      // Also make body/html full height
+      document.body.style.height = "100vh";
+      document.documentElement.style.height = "100vh";
+      document.body.style.overflow = "hidden";
+    });
+  }
+}
+
+// Setup drag and drop for canvas
+function setupCanvasDragDrop() {
+  const canvas = document.getElementById("webgl-canvas");
+  if (!canvas) return;
+
+  // Prevent default drag behaviors
+  ["dragenter", "dragover", "dragleave", "drop"].forEach((eventName) => {
+    canvas.addEventListener(eventName, (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+    });
+  });
+
+  // Visual feedback on drag over
+  canvas.addEventListener("dragenter", () => {
+    canvas.classList.add("drag-over");
+  });
+
+  canvas.addEventListener("dragover", () => {
+    canvas.classList.add("drag-over");
+  });
+
+  canvas.addEventListener("dragleave", () => {
+    canvas.classList.remove("drag-over");
+  });
+
+  // Handle drop
+  canvas.addEventListener("drop", (e) => {
+    e.preventDefault();
+    e.stopPropagation();
+    canvas.classList.remove("drag-over");
+
+    const files = e.dataTransfer.files;
+    if (files.length > 0) {
+      // Dispatch custom event with files for WebGL handling
+      const dropEvent = new CustomEvent("canvasDrop", {
+        detail: { files: Array.from(files) },
+      });
+      canvas.dispatchEvent(dropEvent);
+
+      console.log(`%cDropped ${files.length} file(s) on canvas`, "color: green; font-weight: bold;");
+    }
   });
 }
 
@@ -963,7 +1090,13 @@ if (document.readyState === "loading") {
   document.addEventListener("DOMContentLoaded", () => {
     // Wait a bit for lil-gui to load
     setTimeout(init, 100);
+    // Setup dome entry handler
+    setTimeout(setupDomeEntry, 200);
+    // Setup canvas drag and drop
+    setTimeout(setupCanvasDragDrop, 200);
   });
 } else {
   setTimeout(init, 100);
+  setTimeout(setupDomeEntry, 200);
+  setTimeout(setupCanvasDragDrop, 200);
 }
