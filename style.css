@@ -1,0 +1,154 @@
+:root {
+  /* Colors */
+  --color-bg: #000;
+  --color-wall-border: #ffffff;
+  --color-red: #ff0000;
+  --color-green: #00ff00;
+  --color-blue: #2121ff;
+  --color-yellow: #ffdf00;
+
+  /* Sizes */
+  --cell-size: 20px;
+  --character-size: 16px;
+  --character-offset: calc((var(--cell-size) - var(--character-size)) / 2);
+  --border-width: 2px;
+  --border-radius: 4px;
+  --ghost-border-width: 2px;
+
+  /* Z-index */
+  --z-characters: 10;
+  --z-gui: 1000;
+}
+
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+body {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  min-height: 100vh;
+  background: var(--color-bg);
+  font-family: Arial, sans-serif;
+}
+
+#gui-container {
+  position: fixed;
+  top: 0;
+  left: 0;
+  z-index: var(--z-gui);
+}
+
+#game-container {
+  position: relative;
+}
+
+#maze {
+  position: relative;
+  background: var(--color-bg);
+}
+
+.cell {
+  position: absolute;
+  width: var(--cell-size);
+  height: var(--cell-size);
+}
+
+.wall {
+  background: transparent;
+  border: none;
+}
+
+.wall.border-top {
+  border-top: var(--border-width) double var(--color-wall-border);
+}
+
+.wall.border-right {
+  border-right: var(--border-width) double var(--color-wall-border);
+}
+
+.wall.border-bottom {
+  border-bottom: var(--border-width) double var(--color-wall-border);
+}
+
+.wall.border-left {
+  border-left: var(--border-width) double var(--color-wall-border);
+}
+
+.wall.corner-top-right {
+  border-top-right-radius: var(--border-radius);
+}
+
+.wall.corner-top-left {
+  border-top-left-radius: var(--border-radius);
+}
+
+.wall.corner-bottom-right {
+  border-bottom-right-radius: var(--border-radius);
+}
+
+.wall.corner-bottom-left {
+  border-bottom-left-radius: var(--border-radius);
+}
+
+.path {
+  background: var(--color-bg);
+}
+
+.teleport {
+  background: var(--color-bg);
+  border: 1px solid var(--color-wall-border);
+}
+
+.pacman {
+  position: absolute;
+  width: var(--character-size);
+  height: var(--character-size);
+  border-radius: 0;
+  z-index: var(--z-characters);
+}
+
+.pacman.red {
+  background: var(--color-red);
+}
+
+.pacman.green {
+  background: var(--color-green);
+}
+
+.pacman.blue {
+  background: var(--color-blue);
+}
+
+.pacman.yellow {
+  background: var(--color-yellow);
+}
+
+.ghost {
+  position: absolute;
+  width: var(--character-size);
+  height: var(--character-size);
+  border-radius: 50%;
+  border: var(--ghost-border-width) solid;
+  background: transparent;
+  z-index: var(--z-characters);
+}
+
+.ghost.red {
+  border-color: var(--color-red);
+}
+
+.ghost.green {
+  border-color: var(--color-green);
+}
+
+.ghost.blue {
+  border-color: var(--color-blue);
+}
+
+.ghost.yellow {
+  border-color: var(--color-yellow);
+}
