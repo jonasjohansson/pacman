@@ -110,9 +110,7 @@ let animationId = null;
 let gui = null;
 
 // Multiplayer state
-const REMOTE_SERVER_ADDRESS = "https://pacman-fiit.onrender.com";
-const LOCAL_SERVER_ADDRESS = "http://localhost:3000";
-let useLocalServer = false;
+const REMOTE_SERVER_ADDRESS = "https://pacman-server-239p.onrender.com";
 let ws = null;
 let myPlayerId = null;
 let myCharacterType = null; // 'pacman' or 'ghost'
@@ -122,10 +120,6 @@ let multiplayerMode = false;
 let lastPositionUpdate = 0;
 const POSITION_UPDATE_INTERVAL = 16; // Send position updates every ~16ms (60fps)
 let reconnectTimeoutId = null;
-
-function getServerAddress() {
-  return useLocalServer ? LOCAL_SERVER_ADDRESS : REMOTE_SERVER_ADDRESS;
-}
 
 // Client-side movement intent for my controlled character
 // This stores the last direction key pressed so movement can continue
@@ -172,7 +166,7 @@ function selectCharacter(type, colorName) {
 
 // Initialize WebSocket connection
 function initWebSocket() {
-  const serverAddress = getServerAddress();
+  const serverAddress = REMOTE_SERVER_ADDRESS;
   // Convert http/https to ws/wss for WebSocket
   const wsUrl = serverAddress.replace("https://", "wss://").replace("http://", "ws://");
 
@@ -212,37 +206,6 @@ function initWebSocket() {
   } catch (error) {
     multiplayerMode = false;
   }
-}
-
-// Switch between remote Render server and local server
-function switchServer(useLocal) {
-  useLocalServer = useLocal;
-
-  // Reset multiplayer identity so we don't keep stale IDs when switching backends
-  myPlayerId = null;
-  myCharacterType = null;
-  myColorIndex = null;
-  connectedPlayers.clear();
-  multiplayerMode = false;
-
-  // Stop any pending auto-reconnect from the previous connection
-  if (reconnectTimeoutId) {
-    clearTimeout(reconnectTimeoutId);
-    reconnectTimeoutId = null;
-  }
-
-  // Cleanly close current socket without triggering its auto-reconnect logic
-  if (ws) {
-    try {
-      ws.onclose = null;
-      ws.close();
-    } catch (e) {
-    }
-    ws = null;
-  }
-
-  // Immediately connect to the newly selected server
-  initWebSocket();
 }
 
 // Handle messages from server
@@ -513,7 +476,6 @@ function init() {
     gui = new GUI({ container: guiContainer });
 
     const guiParams = {
-      serverTarget: "Render",
       difficulty: 0.8,
       pacmanSpeed: 0.4,
       ghostSpeed: 0.4,
@@ -526,13 +488,6 @@ function init() {
     // Main controls at root (no folders)
     gui.add(guiParams, "start").name("Start");
     gui.add(guiParams, "restart").name("Restart");
-
-    gui
-      .add(guiParams, "serverTarget", ["Render", "Local"])
-      .name("Server")
-      .onChange((value) => {
-        switchServer(value === "Local");
-      });
 
     // Auto-join is now handled via character selection UI and server availability
 
