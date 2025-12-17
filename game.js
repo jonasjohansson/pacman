@@ -516,15 +516,10 @@ function init() {
 
     const guiParams = {
       difficulty: 0.8,
-      survivalTime: 30,
       pacmanSpeed: 0.7,
       ghostSpeed: 0.7,
       playerType: "Pacman",
       playerColor: "Red",
-      borderStyle: "double",
-      borderColor: "#ffffff",
-      pathBgColor: "#000000",
-      wallBgColor: "transparent",
       start: () => startGame(),
       restart: () => restartGame(),
     };
@@ -574,13 +569,6 @@ function init() {
         aiDifficulty = value;
       });
 
-    controlsFolder
-      .add(guiParams, "survivalTime", 30, 120, 1)
-      .name("Survival Time (s)")
-      .onChange((value) => {
-        survivalTimeThreshold = value;
-      });
-
     // Global speed controls
     controlsFolder
       .add(guiParams, "pacmanSpeed", 0.2, 3, 0.1)
@@ -596,38 +584,7 @@ function init() {
         sendSpeedConfig(guiParams.pacmanSpeed, value);
       });
 
-    // Visual settings folder - closed by default
-    const visualFolder = controlsFolder.addFolder("Visual Settings");
-    visualFolder
-      .add(guiParams, "borderStyle", ["solid", "dashed", "dotted", "double"])
-      .name("Border Style")
-      .onChange((value) => {
-        document.documentElement.style.setProperty("--border-style", value);
-      });
-
-    visualFolder
-      .addColor(guiParams, "borderColor")
-      .name("Border Color")
-      .onChange((value) => {
-        document.documentElement.style.setProperty("--color-wall-border", value);
-      });
-
-    visualFolder
-      .addColor(guiParams, "pathBgColor")
-      .name("Path Background")
-      .onChange((value) => {
-        document.documentElement.style.setProperty("--color-path-bg", value);
-      });
-
-    visualFolder
-      .addColor(guiParams, "wallBgColor")
-      .name("Wall Background")
-      .onChange((value) => {
-        document.documentElement.style.setProperty("--color-wall-bg", value);
-      });
-
-    // Close visual settings folder by default
-    visualFolder.close();
+    // (Visual settings removed from GUI for now)
   }
   const maze = document.getElementById("maze");
   maze.style.width = COLS * CELL_SIZE + "px";
@@ -792,88 +749,7 @@ function init() {
     updateCharacterAppearance(ghost);
   });
 
-  // Add individual character controls to GUI after characters are created
-  // Colors are paired - changing one updates both pacman and ghost
-  if (gui) {
-    // Create color pair objects that sync both characters
-    const colorPairs = COLORS.map((color, i) => {
-      const colorName = color.charAt(0).toUpperCase() + color.slice(1);
-      return {
-        name: colorName,
-        pacman: pacmen[i],
-        ghost: ghosts[i],
-        color: COLORS[i], // Shared color property - synced between pair
-        pacmanSpeed: 1.0,
-        ghostSpeed: 1.0,
-        pacmanImage: "",
-        ghostImage: "",
-      };
-    });
-
-    // Create folders for each color pair
-    COLORS.forEach((color, i) => {
-      if (!pacmen[i] || !ghosts[i]) return;
-      const pair = colorPairs[i];
-      const colorName = color.charAt(0).toUpperCase() + color.slice(1);
-      const pairFolder = gui.addFolder(`${colorName} Pair`);
-
-      // Score display (read-only)
-      const scoreObj = {
-        pacmanScore: 0,
-        ghostScore: 0,
-      };
-      pairFolder.add(scoreObj, "pacmanScore").name("Pacman Score").listen();
-      pairFolder.add(scoreObj, "ghostScore").name("Ghost Score").listen();
-
-      // Shared color control - updates both characters together
-      pairFolder
-        .addColor(pair, "color")
-        .name("Color")
-        .onChange((value) => {
-          // Update both characters with the same color
-          pair.pacman.color = value;
-          pair.ghost.color = value;
-          updateCharacterAppearance(pair.pacman);
-          updateCharacterAppearance(pair.ghost);
-        });
-
-      // Individual images
-      pairFolder
-        .add(pair, "pacmanImage")
-        .name("Pacman Image URL")
-        .onChange((value) => {
-          pair.pacman.image = value;
-          updateCharacterAppearance(pair.pacman);
-        });
-
-      pairFolder
-        .add(pair, "ghostImage")
-        .name("Ghost Image URL")
-        .onChange((value) => {
-          pair.ghost.image = value;
-          updateCharacterAppearance(pair.ghost);
-        });
-
-      // Initialize values from characters
-      pair.pacmanImage = pair.pacman.image;
-      pair.ghostImage = pair.ghost.image;
-
-      // Store score object reference for updates
-      pair.pacman.scoreObj = scoreObj;
-      pair.ghost.scoreObj = scoreObj;
-
-      // Update scores periodically (every 100ms)
-      setInterval(() => {
-        if (pacmen[i] && ghosts[i]) {
-          scoreObj.pacmanScore = pacmen[i].score || 0;
-          scoreObj.ghostScore = ghosts[i].score || 0;
-        }
-      }, 100);
-
-      // Close the folder by default
-      pairFolder.close();
-    });
-  }
+  // (Per-color pair GUI controls and scoring have been removed for now)
 
   // Keyboard controls
   const keys = {};
