@@ -168,8 +168,8 @@ function selectCharacter(type, colorName) {
 
 // Initialize WebSocket connection
 function initWebSocket() {
-  // Use the local development server
-  const serverAddress = "http://localhost:3000";
+  // Use the deployed Render server
+  const serverAddress = "https://pacman-fiit.onrender.com";
   // Convert http/https to ws/wss for WebSocket
   const wsUrl = serverAddress.replace("https://", "wss://").replace("http://", "ws://");
 

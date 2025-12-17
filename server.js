@@ -52,6 +52,9 @@ const gameState = {
   gameStarted: false,
   aiDifficulty: 0.8,
   survivalTimeThreshold: 30,
+  // Global speed multipliers for all pacmen and all ghosts
+  pacmanSpeed: 0.8,
+  ghostSpeed: 0.8,
   pacmen: [],
   ghosts: [],
   lastUpdate: Date.now(),
@@ -467,8 +470,8 @@ function gameLoop() {
       );
     }
 
-    // Move pacman toward its current target
-    moveCharacter(pacman, pacman.speed);
+    // Move pacman toward its current target using global pacman speed
+    moveCharacter(pacman, gameState.pacmanSpeed);
 
     // Pacman-style continuous movement:
     // when we reach the center of a tile, first try to turn to the desired direction,
@@ -533,10 +536,10 @@ function gameLoop() {
 
     if (isPlayerControlled) {
       // Always allow player-controlled ghosts to move, even before the game starts
-      moveCharacter(ghost, ghost.speed);
+      moveCharacter(ghost, gameState.ghostSpeed);
     } else if (gameState.gameStarted) {
       // AI ghosts only move when the game has started
-      moveCharacter(ghost, ghost.speed);
+      moveCharacter(ghost, gameState.ghostSpeed);
       if (isAtTarget(ghost)) {
         ghost.x = ghost.targetX;
         ghost.y = ghost.targetY;
@@ -671,6 +674,9 @@ wss.on("connection", (ws, req) => {
         case "input":
           handleInput(playerId, data);
           break;
+        case "setSpeeds":
+          handleSetSpeeds(data);
+          break;
         case "startGame":
           gameState.gameStarted = true;
           // Force ghosts to get new directions immediately
@@ -750,6 +756,19 @@ function handleJoin(ws, playerId, data) {
   console.log(`${playerId} joined as ${characterType} color ${colorIndex}`);
   ws.send(JSON.stringify({ type: "joined", playerId: playerId, characterType: characterType, colorIndex: colorIndex }));
   broadcastGameState();
+}
+
+function handleSetSpeeds(data) {
+  const { pacmanSpeed, ghostSpeed } = data;
+  if (typeof pacmanSpeed === "number") {
+    gameState.pacmanSpeed = Math.max(0.2, Math.min(3, pacmanSpeed));
+  }
+  if (typeof ghostSpeed === "number") {
+    gameState.ghostSpeed = Math.max(0.2, Math.min(3, ghostSpeed));
+  }
+  console.log(
+    `[setSpeeds] pacmanSpeed=${gameState.pacmanSpeed.toFixed(2)}, ghostSpeed=${gameState.ghostSpeed.toFixed(2)}`
+  );
 }
 
 function handleInput(playerId, data) {
