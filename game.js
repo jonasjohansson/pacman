@@ -889,8 +889,8 @@ function init() {
   function renderLoop() {
     // Smoothing factors
     const OTHER_SMOOTHING = 0.25;
-    // My own character uses a slightly higher factor so it follows the server closely
-    const MY_SMOOTHING = 0.35;
+    // My own character follows the server almost exactly to minimize input latency
+    const MY_SMOOTHING = 1.0;
     const SNAP_DISTANCE = 40; // pixels – snap if too far to avoid long slides
 
     pacmen.forEach((pacman, index) => {
