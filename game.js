@@ -510,8 +510,8 @@ function init() {
 
     const guiParams = {
       difficulty: 0.8,
-      pacmanSpeed: 0.7,
-      ghostSpeed: 0.7,
+      pacmanSpeed: 0.4,
+      ghostSpeed: 0.4,
       playerType: "Pacman",
       playerColor: "Red",
       start: () => startGame(),

@@ -51,9 +51,9 @@ const gameState = {
   },
   gameStarted: false,
   aiDifficulty: 0.8,
-  // Global speed multipliers for all pacmen and all ghosts
-  pacmanSpeed: 0.7,
-  ghostSpeed: 0.7,
+  // Global speed multipliers for all pacmen and all ghosts (default a bit slower)
+  pacmanSpeed: 0.4,
+  ghostSpeed: 0.4,
   pacmen: [],
   ghosts: [],
   lastUpdate: Date.now(),
