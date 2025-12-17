@@ -423,10 +423,6 @@ function gameLoop() {
   // Log a lightweight heartbeat about once per second
   debugTickCounter++;
   if (debugTickCounter % 60 === 0) {
-    console.log(
-      `[gameLoop] tick=${debugTickCounter} players=${gameState.players.size} ` +
-        `pacmen=${gameState.pacmen.length} ghosts=${gameState.ghosts.length}`
-    );
   }
 
   // Process player input (pacmen and ghosts always)
@@ -434,8 +430,6 @@ function gameLoop() {
     if (!player.connected || !player.pendingInput) return;
     const input = player.pendingInput;
     player.pendingInput = null;
-
-    console.log(`[input] from ${playerId}: type=${player.type} colorIndex=${player.colorIndex} input=`, input);
 
     if (player.type === "pacman") {
       const pacman = gameState.pacmen[player.colorIndex];
@@ -499,16 +493,6 @@ function gameLoop() {
     if (!pacman) return;
 
     const isPlayerControlledPacman = isPacmanPlayerControlled(index);
-
-    // Periodic debug for the pacman that a player controls
-    if (isPlayerControlledPacman && debugTickCounter % 30 === 0) {
-      console.log(
-        `[pac-debug] index=${index} color=${pacman.color} ` +
-          `x=${pacman.x}, y=${pacman.y}, px=${pacman.px.toFixed(1)}, py=${pacman.py.toFixed(1)}, ` +
-          `dir=(${pacman.dirX},${pacman.dirY}), next=(${pacman.nextDirX},${pacman.nextDirY}), ` +
-          `target=(${pacman.targetX},${pacman.targetY})`
-      );
-    }
 
     // Move pacman toward its current target using global pacman speed
     moveCharacter(pacman, gameState.pacmanSpeed);
@@ -690,7 +674,6 @@ const wss = new WebSocketServer({
 
 wss.on("connection", (ws, req) => {
   const playerId = `player_${gameState.nextPlayerId++}`;
-  console.log(`New connection: ${playerId}`);
 
   ws.send(
     JSON.stringify({
@@ -731,10 +714,8 @@ wss.on("connection", (ws, req) => {
           sendGameState(ws);
           break;
         default:
-          console.log(`Unknown message type: ${data.type}`);
       }
     } catch (error) {
-      console.error("Error parsing message:", error);
     }
   });
 
@@ -743,7 +724,6 @@ wss.on("connection", (ws, req) => {
   });
 
   ws.on("error", (error) => {
-    console.error(`WebSocket error for ${playerId}:`, error);
     handleDisconnect(playerId);
   });
 });
@@ -785,10 +765,8 @@ function handleJoin(ws, playerId, data) {
   if (characterType === "ghost" && gameState.ghosts[colorIndex]) {
     const ghost = gameState.ghosts[colorIndex];
     ghost.positionHistory = [];
-    console.log(`Player ${playerId} took control of ghost ${colorIndex}, AI stopped`);
   }
 
-  console.log(`${playerId} joined as ${characterType} color ${colorIndex}`);
   ws.send(JSON.stringify({ type: "joined", playerId: playerId, characterType: characterType, colorIndex: colorIndex }));
   broadcastGameState();
 }
@@ -801,27 +779,22 @@ function handleSetSpeeds(data) {
   if (typeof ghostSpeed === "number") {
     gameState.ghostSpeed = Math.max(0.2, Math.min(3, ghostSpeed));
   }
-  console.log(`[setSpeeds] pacmanSpeed=${gameState.pacmanSpeed.toFixed(2)}, ghostSpeed=${gameState.ghostSpeed.toFixed(2)}`);
 }
 
 function handleInput(playerId, data) {
   const player = gameState.players.get(playerId);
   if (!player) {
-    console.log(`[handleInput] no player for id=${playerId}`);
     return;
   }
   if (!player.connected) {
-    console.log(`[handleInput] player ${playerId} not connected`);
     return;
   }
-  console.log(`[handleInput] storing input for ${playerId}: type=${player.type} colorIndex=${player.colorIndex} input=`, data.input);
   player.pendingInput = data.input;
 }
 
 function handleDisconnect(playerId) {
   const player = gameState.players.get(playerId);
   if (player) {
-    console.log(`${playerId} disconnected (${player.type} color ${player.colorIndex})`);
     gameState.availableColors[player.type].push(player.colorIndex);
     gameState.availableColors[player.type].sort();
     gameState.players.delete(playerId);
@@ -924,6 +897,4 @@ initCharacters();
 setInterval(gameLoop, 16); // ~60fps game loop
 
 server.listen(PORT, () => {
-  console.log(`Server running on http://localhost:${PORT}`);
-  console.log(`WebSocket server ready for connections`);
 });

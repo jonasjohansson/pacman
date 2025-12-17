@@ -110,6 +110,9 @@ let animationId = null;
 let gui = null;
 
 // Multiplayer state
+const REMOTE_SERVER_ADDRESS = "https://pacman-fiit.onrender.com";
+const LOCAL_SERVER_ADDRESS = "http://localhost:3000";
+let useLocalServer = false;
 let ws = null;
 let myPlayerId = null;
 let myCharacterType = null; // 'pacman' or 'ghost'
@@ -118,6 +121,11 @@ let connectedPlayers = new Map(); // Map of playerId -> { type, colorIndex }
 let multiplayerMode = false;
 let lastPositionUpdate = 0;
 const POSITION_UPDATE_INTERVAL = 16; // Send position updates every ~16ms (60fps)
+let reconnectTimeoutId = null;
+
+function getServerAddress() {
+  return useLocalServer ? LOCAL_SERVER_ADDRESS : REMOTE_SERVER_ADDRESS;
+}
 
 // Client-side movement intent for my controlled character
 // This stores the last direction key pressed so movement can continue
@@ -130,7 +138,6 @@ function startGame() {
   if (multiplayerMode && ws && ws.readyState === WebSocket.OPEN) {
     ws.send(JSON.stringify({ type: "startGame" }));
   } else {
-    console.warn("Cannot start game: not connected to server");
   }
 }
 
@@ -138,7 +145,6 @@ function restartGame() {
   if (multiplayerMode && ws && ws.readyState === WebSocket.OPEN) {
     ws.send(JSON.stringify({ type: "restartGame" }));
   } else {
-    console.warn("Cannot restart game: not connected to server");
   }
 }
 
@@ -156,28 +162,29 @@ function selectCharacter(type, colorName) {
     currentGhost = null;
     playerType = "pacman";
     pacmen[colorIndex].element?.classList.add("selected");
-    console.log(`%cNow controlling ${colorName} pacman`, `color: ${COLORS[colorIndex]}; font-weight: bold;`);
   } else if (type === "ghost" && ghosts[colorIndex]) {
     currentGhost = colorIndex;
     currentPacman = 0;
     playerType = "ghost";
     ghosts[colorIndex].element?.classList.add("selected");
-    console.log(`%cNow controlling ${colorName} ghost`, `color: ${COLORS[colorIndex]}; font-weight: bold;`);
   }
 }
 
 // Initialize WebSocket connection
 function initWebSocket() {
-  // Use the deployed Render server
-  const serverAddress = "https://pacman-fiit.onrender.com";
+  const serverAddress = getServerAddress();
   // Convert http/https to ws/wss for WebSocket
   const wsUrl = serverAddress.replace("https://", "wss://").replace("http://", "ws://");
+
+  if (reconnectTimeoutId) {
+    clearTimeout(reconnectTimeoutId);
+    reconnectTimeoutId = null;
+  }
 
   try {
     ws = new WebSocket(wsUrl);
 
     ws.onopen = () => {
-      console.log("%cConnected to server", "color: green; font-weight: bold;");
       multiplayerMode = true;
       // Request initial game state (auto-join will be handled when it arrives)
       if (ws.readyState === WebSocket.OPEN) {
@@ -190,25 +197,52 @@ function initWebSocket() {
         const data = JSON.parse(event.data);
         handleServerMessage(data);
       } catch (error) {
-        console.error("Error parsing server message:", error);
       }
     };
 
     ws.onerror = (error) => {
-      console.error("WebSocket error:", error);
       multiplayerMode = false;
     };
 
     ws.onclose = () => {
-      console.log("%cDisconnected from server", "color: orange; font-weight: bold;");
       multiplayerMode = false;
       // Try to reconnect after 3 seconds
-      setTimeout(initWebSocket, 3000);
+      reconnectTimeoutId = setTimeout(initWebSocket, 3000);
     };
   } catch (error) {
-    console.warn("WebSocket not available, running in single-player mode:", error);
     multiplayerMode = false;
   }
+}
+
+// Switch between remote Render server and local server
+function switchServer(useLocal) {
+  useLocalServer = useLocal;
+
+  // Reset multiplayer identity so we don't keep stale IDs when switching backends
+  myPlayerId = null;
+  myCharacterType = null;
+  myColorIndex = null;
+  connectedPlayers.clear();
+  multiplayerMode = false;
+
+  // Stop any pending auto-reconnect from the previous connection
+  if (reconnectTimeoutId) {
+    clearTimeout(reconnectTimeoutId);
+    reconnectTimeoutId = null;
+  }
+
+  // Cleanly close current socket without triggering its auto-reconnect logic
+  if (ws) {
+    try {
+      ws.onclose = null;
+      ws.close();
+    } catch (e) {
+    }
+    ws = null;
+  }
+
+  // Immediately connect to the newly selected server
+  initWebSocket();
 }
 
 // Handle messages from server
@@ -216,7 +250,6 @@ function handleServerMessage(data) {
   switch (data.type) {
     case "connected":
       myPlayerId = data.playerId;
-      console.log(`%cConnected as ${myPlayerId}`, "color: green; font-weight: bold;");
       break;
     case "joined": {
       const newType = data.characterType;
@@ -224,7 +257,6 @@ function handleServerMessage(data) {
 
       // If this joined message is identical to our current state, just log and ignore
       if (myCharacterType === newType && myColorIndex === newColorIndex) {
-        console.warn(`%cAlready joined as ${myCharacterType} color ${myColorIndex}, ignoring duplicate join`, "color: orange;");
         break;
       }
 
@@ -232,7 +264,6 @@ function handleServerMessage(data) {
       myCharacterType = newType;
       myColorIndex = newColorIndex;
       window.autoJoinAttempted = false; // reset flag on successful join
-      console.log(`%cJoined as ${myCharacterType} color ${myColorIndex}`, "color: green; font-weight: bold;");
 
       // Auto-select the character we joined as so the GUI and local selection match the server
       const colorName = COLORS[myColorIndex].charAt(0).toUpperCase() + COLORS[myColorIndex].slice(1);
@@ -244,7 +275,6 @@ function handleServerMessage(data) {
       break;
     }
     case "joinFailed":
-      console.error(`%cJoin failed: ${data.reason}`, "color: red; font-weight: bold;");
       // allow auto-join to try again on next gameState
       window.autoJoinAttempted = false;
       break;
@@ -293,18 +323,15 @@ function handleServerMessage(data) {
             }
           }, 200);
         } else {
-          console.warn("No available characters to join");
           window.autoJoinAttempted = false; // allow retry when availability changes
         }
       }
       break;
     case "gameStarted":
       gameStarted = true;
-      console.log("%cGame Started!", "color: green; font-weight: bold;");
       break;
     case "gameRestarted":
       gameStarted = false;
-      console.log("%cGame Restarted!", "color: orange; font-weight: bold;");
       break;
     case "playerInput":
       // Handle input from other players (for future sync)
@@ -320,7 +347,6 @@ function handleServerMessage(data) {
       }
       break;
     case "playerLeft":
-      console.log(`%cPlayer ${data.playerId} left`, "color: orange; font-weight: bold;");
       break;
   }
 }
@@ -405,18 +431,6 @@ function sendSpeedConfig(pacmanSpeed, ghostSpeed) {
 // Send input to server
 function sendInput(input) {
   if (ws && ws.readyState === WebSocket.OPEN && myPlayerId) {
-    console.log(
-      "%cSending input to server",
-      "color: cyan;",
-      "playerId=",
-      myPlayerId,
-      "type=",
-      myCharacterType,
-      "colorIndex=",
-      myColorIndex,
-      "input=",
-      input
-    );
     ws.send(
       JSON.stringify({
         type: "input",
@@ -452,12 +466,10 @@ function updateAvailableColors(availableColors) {
 function joinAsCharacter(characterType, colorIndex) {
   // If we're already this character, don't re-join
   if (myCharacterType === characterType && myColorIndex === colorIndex) {
-    console.log(`%cAlready controlling ${characterType} color ${colorIndex}, not sending join again`, "color: gray;");
     return;
   }
 
   if (ws && ws.readyState === WebSocket.OPEN) {
-    console.log(`%cAttempting to join as ${characterType} color ${colorIndex}`, "color: blue;");
     ws.send(
       JSON.stringify({
         type: "join",
@@ -466,7 +478,6 @@ function joinAsCharacter(characterType, colorIndex) {
       })
     );
   } else {
-    console.warn("Not connected to server, cannot join");
     window.autoJoinAttempted = false;
   }
 }
@@ -502,6 +513,7 @@ function init() {
     gui = new GUI({ container: guiContainer });
 
     const guiParams = {
+      serverTarget: "Render",
       difficulty: 0.8,
       pacmanSpeed: 0.4,
       ghostSpeed: 0.4,
@@ -514,6 +526,13 @@ function init() {
     // Main controls at root (no folders)
     gui.add(guiParams, "start").name("Start");
     gui.add(guiParams, "restart").name("Restart");
+
+    gui
+      .add(guiParams, "serverTarget", ["Render", "Local"])
+      .name("Server")
+      .onChange((value) => {
+        switchServer(value === "Local");
+      });
 
     // Auto-join is now handled via character selection UI and server availability
 
@@ -811,7 +830,6 @@ function init() {
     else if (e.key === "ArrowDown") dir = "down";
 
     if (dir) {
-      console.log("%cKeydown direction", "color: yellow;", dir, "for", myCharacterType, "color", myColorIndex);
       sendInput({ dir });
     }
   });
@@ -1035,7 +1053,6 @@ function moveGhostAI(ghost) {
   const possibleMoves = getPossibleMoves(ghost);
 
   if (possibleMoves.length === 0) {
-    console.warn(`Ghost at (${ghost.x}, ${ghost.y}) has no valid moves!`);
     ghost.positionHistory = [];
     return;
   }
@@ -1142,14 +1159,11 @@ function checkCollisions() {
       if (!ghost) return;
       // Check if they're on the same grid position and same color
       if (pacman.color === ghost.color && pacman.x === ghost.x && pacman.y === ghost.y) {
-        console.log(`%c${pacman.color} ghost caught ${pacman.color} pacman! Respawned.`, `color: ${pacman.color}; font-weight: bold;`);
-
         // Award point to ghost (chaser)
         ghost.score++;
         if (ghost.scoreObj) {
           ghost.scoreObj.ghostScore = ghost.score;
         }
-        console.log(`%c${ghost.color} ghost score: ${ghost.score}`, `color: ${ghost.color}; font-weight: bold;`);
 
         // Respawn both characters
         if (pacman.spawnPos) {
@@ -1264,8 +1278,6 @@ function setupCanvasDragDrop() {
         detail: { files: Array.from(files) },
       });
       canvas.dispatchEvent(dropEvent);
-
-      console.log(`%cDropped ${files.length} file(s) on canvas`, "color: green; font-weight: bold;");
     }
   });
 }
