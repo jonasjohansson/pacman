@@ -511,15 +511,13 @@ function init() {
       restart: () => restartGame(),
     };
 
-    // Main controls folder - kept open
-    const controlsFolder = gui.addFolder("Controls");
-
-    controlsFolder.add(guiParams, "start").name("Start");
-    controlsFolder.add(guiParams, "restart").name("Restart");
+    // Main controls at root (no folders)
+    gui.add(guiParams, "start").name("Start");
+    gui.add(guiParams, "restart").name("Restart");
 
     // Auto-join is now handled via character selection UI and server availability
 
-    controlsFolder
+    gui
       .add(guiParams, "difficulty", 0, 1, 0.1)
       .name("AI Skill")
       .onChange((value) => {
@@ -527,22 +525,21 @@ function init() {
       });
 
     // Global speed controls
-    controlsFolder
+    gui
       .add(guiParams, "pacmanSpeed", 0.2, 3, 0.1)
       .name("Pacman Speed")
       .onChange((value) => {
         sendSpeedConfig(value, guiParams.ghostSpeed);
       });
 
-    controlsFolder
+    gui
       .add(guiParams, "ghostSpeed", 0.2, 3, 0.1)
       .name("Ghost Speed")
       .onChange((value) => {
         sendSpeedConfig(guiParams.pacmanSpeed, value);
       });
 
-    // Character selection folder: one entry per pacman/ghost/color
-    const charactersFolder = controlsFolder.addFolder("Characters");
+    // Character selection: one entry per pacman/ghost/color at root
     const joinActions = {};
     window.characterControllers = { pacman: [], ghost: [] };
 
@@ -558,13 +555,11 @@ function init() {
         joinAsCharacter("ghost", i);
       };
 
-      const pacCtrl = charactersFolder.add(joinActions, pacmanKey);
-      const ghostCtrl = charactersFolder.add(joinActions, ghostKey);
+      const pacCtrl = gui.add(joinActions, pacmanKey);
+      const ghostCtrl = gui.add(joinActions, ghostKey);
       window.characterControllers.pacman[i] = pacCtrl;
       window.characterControllers.ghost[i] = ghostCtrl;
     });
-
-    charactersFolder.close();
   }
   const maze = document.getElementById("maze");
   maze.style.width = COLS * CELL_SIZE + "px";
