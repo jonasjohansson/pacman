@@ -428,28 +428,21 @@ function sendInput(input) {
 
 // Update GUI with available colors from server
 function updateAvailableColors(availableColors) {
-  if (!window.playerColorController) return;
-
-  // If we've already joined a character, don't auto-change our local color selection.
-  // This prevents the GUI from flipping between colors and confusing which character we control.
-  if (myCharacterType && myColorIndex !== null) {
-    return;
-  }
-
-  const currentType = window.playerTypeController ? window.playerTypeController.getValue().toLowerCase() : "pacman";
-  const availableForType = availableColors[currentType] || [];
-
-  // Get current color options
-  const allColors = ["Red", "Green", "Blue", "Yellow"];
-  const availableColorNames = availableForType.map((i) => allColors[i]);
-
-  // Update the controller options
-  window.playerColorController.options(availableColorNames);
-
-  // If current selection is not available, switch to first available
-  const currentColor = window.playerColorController.getValue();
-  if (!availableColorNames.includes(currentColor) && availableColorNames.length > 0) {
-    window.playerColorController.setValue(availableColorNames[0]);
+  // Update character selection controllers (radio-like) based on availability
+  if (window.characterControllers) {
+    ["pacman", "ghost"].forEach((type) => {
+      const controllers = window.characterControllers[type] || [];
+      for (let i = 0; i < controllers.length; i++) {
+        const ctrl = controllers[i];
+        if (!ctrl) continue;
+        const isAvailable = availableColors[type] && availableColors[type].includes(i);
+        if (isAvailable) {
+          ctrl.enable();
+        } else {
+          ctrl.disable();
+        }
+      }
+    });
   }
 }
 
@@ -523,38 +516,8 @@ function init() {
 
     controlsFolder.add(guiParams, "start").name("Start");
     controlsFolder.add(guiParams, "restart").name("Restart");
-    const playerTypeController = controlsFolder
-      .add(guiParams, "playerType", ["Pacman", "Ghost"])
-      .name("Control")
-      .onChange((value) => {
-        const type = value.toLowerCase();
-        selectCharacter(type, guiParams.playerColor);
-        // Update color options based on type
-        if (multiplayerMode && ws && ws.readyState === WebSocket.OPEN) {
-          ws.send(JSON.stringify({ type: "gameState" }));
-        }
-      });
-    window.playerTypeController = playerTypeController;
-    const playerColorController = controlsFolder
-      .add(guiParams, "playerColor", ["Red", "Green", "Blue", "Yellow"])
-      .name("Color")
-      .onChange((value) => {
-        selectCharacter(guiParams.playerType.toLowerCase(), value);
-        // If multiplayer, try to join as this character
-        if (multiplayerMode && ws && ws.readyState === WebSocket.OPEN) {
-          const colorIndex = COLORS.indexOf(value.toLowerCase());
-          const characterType = guiParams.playerType.toLowerCase();
-          joinAsCharacter(characterType, colorIndex);
-        }
-      });
-    window.playerColorController = playerColorController;
 
-    // Auto-join as Red Pacman on startup
-    if (multiplayerMode && ws && ws.readyState === WebSocket.OPEN) {
-      setTimeout(() => {
-        joinAsCharacter("pacman", 0); // Join as Red Pacman
-      }, 500);
-    }
+    // Auto-join is now handled via character selection UI and server availability
 
     controlsFolder
       .add(guiParams, "difficulty", 0, 1, 0.1)
@@ -578,7 +541,30 @@ function init() {
         sendSpeedConfig(guiParams.pacmanSpeed, value);
       });
 
-    // (Visual settings removed from GUI for now)
+    // Character selection folder: one entry per pacman/ghost/color
+    const charactersFolder = controlsFolder.addFolder("Characters");
+    const joinActions = {};
+    window.characterControllers = { pacman: [], ghost: [] };
+
+    COLORS.forEach((color, i) => {
+      const colorName = color.charAt(0).toUpperCase() + color.slice(1);
+      const pacmanKey = `Pacman ${colorName}`;
+      const ghostKey = `Ghost ${colorName}`;
+
+      joinActions[pacmanKey] = () => {
+        joinAsCharacter("pacman", i);
+      };
+      joinActions[ghostKey] = () => {
+        joinAsCharacter("ghost", i);
+      };
+
+      const pacCtrl = charactersFolder.add(joinActions, pacmanKey);
+      const ghostCtrl = charactersFolder.add(joinActions, ghostKey);
+      window.characterControllers.pacman[i] = pacCtrl;
+      window.characterControllers.ghost[i] = ghostCtrl;
+    });
+
+    charactersFolder.close();
   }
   const maze = document.getElementById("maze");
   maze.style.width = COLS * CELL_SIZE + "px";

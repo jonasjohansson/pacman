@@ -88,6 +88,9 @@ function initCharacters() {
     // Queued direction from the last input (may be applied at the next junction)
     nextDirX: 0,
     nextDirY: 0,
+    lastDirX: 0,
+    lastDirY: 0,
+    positionHistory: [],
   }));
 
   gameState.ghosts = ghostSpawnPositions.slice(0, 4).map((pos, i) => {
@@ -262,6 +265,50 @@ function determineBestMove(ghost, possibleMoves, targetPacman) {
   return bestMove || possibleMoves[0];
 }
 
+// Simple AI for pacmen: choose a direction that tends to increase distance from the same-colored ghost
+function movePacmanAI(pacman, index) {
+  const ghost = gameState.ghosts[index];
+  const possibleMoves = getPossibleMoves(pacman);
+  if (possibleMoves.length === 0) return;
+
+  // If there's no corresponding ghost, just pick a random move
+  if (!ghost) {
+    const move = possibleMoves[Math.floor(Math.random() * possibleMoves.length)];
+    if (move) {
+      pacman.targetX = move.newX;
+      pacman.targetY = move.newY;
+      pacman.dirX = move.x;
+      pacman.dirY = move.y;
+      pacman.lastDirX = move.x;
+      pacman.lastDirY = move.y;
+    }
+    return;
+  }
+
+  // Choose the move that maximizes distance from this pacman's matching ghost
+  let bestMove = possibleMoves[0];
+  let bestDistance = -Infinity;
+  const ghostPos = { x: ghost.x, y: ghost.y };
+
+  possibleMoves.forEach((move) => {
+    const movePos = { x: move.newX, y: move.newY };
+    const distance = calculateDistanceWithWrap(movePos, ghostPos);
+    if (distance > bestDistance) {
+      bestDistance = distance;
+      bestMove = move;
+    }
+  });
+
+  if (bestMove) {
+    pacman.targetX = bestMove.newX;
+    pacman.targetY = bestMove.newY;
+    pacman.dirX = bestMove.x;
+    pacman.dirY = bestMove.y;
+    pacman.lastDirX = bestMove.x;
+    pacman.lastDirY = bestMove.y;
+  }
+}
+
 function moveGhostAI(ghost) {
   ghost.x = ghost.targetX;
   ghost.y = ghost.targetY;
@@ -421,28 +468,27 @@ function gameLoop() {
       const ghost = gameState.ghosts[player.colorIndex];
       if (!ghost) return;
 
-      // For ghosts we still support tile-based targeting, but also allow dir input
+      // Direction-based input for ghosts, same continuous style as pacmen
       if (input.dir) {
         const dirDef = DIRECTIONS.find((d) => d.dir === input.dir);
         if (!dirDef) return;
         const dx = dirDef.x;
         const dy = dirDef.y;
-        const targetX = ghost.x + dx;
-        const targetY = ghost.y + dy;
-        if (targetX >= 0 && targetX < COLS && targetY >= 0 && targetY < ROWS && isPath(targetX, targetY)) {
-          ghost.targetX = targetX;
-          ghost.targetY = targetY;
-          ghost.lastDirX = dx;
-          ghost.lastDirY = dy;
-        }
-      } else if (input.targetX !== undefined && input.targetY !== undefined) {
-        if (isPath(input.targetX, input.targetY)) {
-          ghost.targetX = input.targetX;
-          ghost.targetY = input.targetY;
-          const dx = input.targetX - ghost.x;
-          const dy = input.targetY - ghost.y;
-          ghost.lastDirX = dx === 0 ? 0 : dx > 0 ? 1 : -1;
-          ghost.lastDirY = dy === 0 ? 0 : dy > 0 ? 1 : -1;
+
+        // Store desired direction; applied at next tile center
+        ghost.nextDirX = dx;
+        ghost.nextDirY = dy;
+
+        // If currently stopped, try to start immediately
+        if (!ghost.dirX && !ghost.dirY) {
+          const startX = ghost.x + dx;
+          const startY = ghost.y + dy;
+          if (startX >= 0 && startX < COLS && startY >= 0 && startY < ROWS && isPath(startX, startY)) {
+            ghost.dirX = dx;
+            ghost.dirY = dy;
+            ghost.targetX = startX;
+            ghost.targetY = startY;
+          }
         }
       }
     }
@@ -467,56 +513,42 @@ function gameLoop() {
     // Move pacman toward its current target using global pacman speed
     moveCharacter(pacman, gameState.pacmanSpeed);
 
-    // Pacman-style continuous movement:
-    // when we reach the center of a tile, first try to turn to the desired direction,
-    // otherwise continue straight in the current direction until a wall.
     if (isAtTarget(pacman)) {
-      if (isPlayerControlledPacman) {
-        console.log(
-          `[pac-debug] at-target index=${index} color=${pacman.color} ` +
-            `x=${pacman.x}, y=${pacman.y}, target=(${pacman.targetX},${pacman.targetY}), ` +
-            `dir=(${pacman.dirX},${pacman.dirY}), next=(${pacman.nextDirX},${pacman.nextDirY})`
-        );
-      }
-      let usedDesired = false;
+      if (!gameState.gameStarted || isPlayerControlledPacman) {
+        // Human-controlled or pre-start pacmen: Pacman-style continuous movement.
+        // When we reach the center of a tile, first try to turn to the desired direction,
+        // otherwise continue straight in the current direction until a wall.
+        let usedDesired = false;
 
-      // Try to apply queued direction first (allows buffered turns)
-      if (pacman.nextDirX || pacman.nextDirY) {
-        const desiredX = pacman.x + pacman.nextDirX;
-        const desiredY = pacman.y + pacman.nextDirY;
-        if (desiredX >= 0 && desiredX < COLS && desiredY >= 0 && desiredY < ROWS && isPath(desiredX, desiredY)) {
-          pacman.dirX = pacman.nextDirX;
-          pacman.dirY = pacman.nextDirY;
-          pacman.targetX = desiredX;
-          pacman.targetY = desiredY;
-          usedDesired = true;
-
-          console.log(
-            `Pacman[${index}] (${pacman.color}) turning to dir (${pacman.dirX},${pacman.dirY}) at (${pacman.x},${pacman.y}) -> (${desiredX},${desiredY})`
-          );
-        } else {
-          console.log(
-            `Pacman[${index}] (${pacman.color}) desired turn blocked at (${pacman.x},${pacman.y}) dir (${pacman.nextDirX},${pacman.nextDirY})`
-          );
+        // Try to apply queued direction first (allows buffered turns)
+        if (pacman.nextDirX || pacman.nextDirY) {
+          const desiredX = pacman.x + pacman.nextDirX;
+          const desiredY = pacman.y + pacman.nextDirY;
+          if (desiredX >= 0 && desiredX < COLS && desiredY >= 0 && desiredY < ROWS && isPath(desiredX, desiredY)) {
+            pacman.dirX = pacman.nextDirX;
+            pacman.dirY = pacman.nextDirY;
+            pacman.targetX = desiredX;
+            pacman.targetY = desiredY;
+            usedDesired = true;
+          }
         }
-      }
 
-      // If desired direction isn't possible, try to continue straight
-      if (!usedDesired && (pacman.dirX || pacman.dirY)) {
-        const forwardX = pacman.x + pacman.dirX;
-        const forwardY = pacman.y + pacman.dirY;
-        if (forwardX >= 0 && forwardX < COLS && forwardY >= 0 && forwardY < ROWS && isPath(forwardX, forwardY)) {
-          pacman.targetX = forwardX;
-          pacman.targetY = forwardY;
-          console.log(`Pacman[${index}] (${pacman.color}) moving forward dir (${pacman.dirX},${pacman.dirY}) to (${forwardX},${forwardY})`);
-        } else {
-          // Hit a wall; stop until a new valid direction is given
-          console.log(
-            `Pacman[${index}] (${pacman.color}) hit wall at (${forwardX},${forwardY}) while moving dir (${pacman.dirX},${pacman.dirY}), stopping`
-          );
-          pacman.dirX = 0;
-          pacman.dirY = 0;
+        // If desired direction isn't possible, try to continue straight
+        if (!usedDesired && (pacman.dirX || pacman.dirY)) {
+          const forwardX = pacman.x + pacman.dirX;
+          const forwardY = pacman.y + pacman.dirY;
+          if (forwardX >= 0 && forwardX < COLS && forwardY >= 0 && forwardY < ROWS && isPath(forwardX, forwardY)) {
+            pacman.targetX = forwardX;
+            pacman.targetY = forwardY;
+          } else {
+            // Hit a wall; stop until a new valid direction is given
+            pacman.dirX = 0;
+            pacman.dirY = 0;
+          }
         }
+      } else {
+        // Game started and this pacman is NOT player-controlled: let AI move it
+        movePacmanAI(pacman, index);
       }
     }
   });
@@ -528,30 +560,59 @@ function gameLoop() {
       (p) => p.type === "ghost" && p.colorIndex === index && p.connected
     );
 
+    // All ghosts move with global ghost speed
+    moveCharacter(ghost, gameState.ghostSpeed);
+
+    if (!isAtTarget(ghost)) {
+      return;
+    }
+
+    // At tile center: human-controlled ghosts use continuous movement like pacman,
+    // others use existing ghost AI (only when the game is started).
     if (isPlayerControlled) {
-      // Always allow player-controlled ghosts to move, even before the game starts
-      moveCharacter(ghost, gameState.ghostSpeed);
+      let usedDesired = false;
+
+      if (ghost.nextDirX || ghost.nextDirY) {
+        const desiredX = ghost.x + ghost.nextDirX;
+        const desiredY = ghost.y + ghost.nextDirY;
+        if (desiredX >= 0 && desiredX < COLS && desiredY >= 0 && desiredY < ROWS && isPath(desiredX, desiredY)) {
+          ghost.dirX = ghost.nextDirX;
+          ghost.dirY = ghost.nextDirY;
+          ghost.targetX = desiredX;
+          ghost.targetY = desiredY;
+          usedDesired = true;
+        }
+      }
+
+      if (!usedDesired && (ghost.dirX || ghost.dirY)) {
+        const forwardX = ghost.x + ghost.dirX;
+        const forwardY = ghost.y + ghost.dirY;
+        if (forwardX >= 0 && forwardX < COLS && forwardY >= 0 && forwardY < ROWS && isPath(forwardX, forwardY)) {
+          ghost.targetX = forwardX;
+          ghost.targetY = forwardY;
+        } else {
+          ghost.dirX = 0;
+          ghost.dirY = 0;
+        }
+      }
     } else if (gameState.gameStarted) {
-      // AI ghosts only move when the game has started
-      moveCharacter(ghost, gameState.ghostSpeed);
-      if (isAtTarget(ghost)) {
-        ghost.x = ghost.targetX;
-        ghost.y = ghost.targetY;
-        if ((ghost.lastDirX === 0 && ghost.lastDirY === 0) || (ghost.targetX === ghost.x && ghost.targetY === ghost.y)) {
+      // AI ghosts only move with intelligence when the game has started
+      ghost.x = ghost.targetX;
+      ghost.y = ghost.targetY;
+      if ((ghost.lastDirX === 0 && ghost.lastDirY === 0) || (ghost.targetX === ghost.x && ghost.targetY === ghost.y)) {
+        moveGhostAI(ghost);
+      } else {
+        ghost.moveTimer += deltaTime;
+        const moveInterval = Math.max(50, 300 - gameState.aiDifficulty * 250);
+        if (ghost.moveTimer >= moveInterval) {
+          ghost.moveTimer = 0;
           moveGhostAI(ghost);
         } else {
-          ghost.moveTimer += deltaTime;
-          const moveInterval = Math.max(50, 300 - gameState.aiDifficulty * 250);
-          if (ghost.moveTimer >= moveInterval) {
-            ghost.moveTimer = 0;
+          const prevTargetX = ghost.targetX;
+          const prevTargetY = ghost.targetY;
+          continueInCurrentDirection(ghost);
+          if (ghost.targetX === prevTargetX && ghost.targetY === prevTargetY) {
             moveGhostAI(ghost);
-          } else {
-            const prevTargetX = ghost.targetX;
-            const prevTargetY = ghost.targetY;
-            continueInCurrentDirection(ghost);
-            if (ghost.targetX === prevTargetX && ghost.targetY === prevTargetY) {
-              moveGhostAI(ghost);
-            }
           }
         }
       }
