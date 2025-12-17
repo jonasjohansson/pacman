@@ -77,8 +77,8 @@ function initCharacters() {
     targetX: pos.x,
     targetY: pos.y,
     color: COLORS[i],
-    // Slightly faster base speed for pacmen so they feel more responsive
-    speed: 1.3,
+    // Default pacman speed (slightly slower than before, closer to classic pace)
+    speed: 1.0,
     score: 0,
     spawnPos: { ...pos },
     // Direction-based movement: current direction the pacman is actually moving

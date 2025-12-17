@@ -684,7 +684,8 @@ function init() {
       targetY: pos.y,
       color: COLORS[i],
       // Match server-side default: pacmen a bit faster than ghosts
-      speed: 1.3,
+      // Default pacman speed (kept in sync with server)
+      speed: 1.0,
       image: "",
       score: 0,
       spawnPos: { ...pos },
