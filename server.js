@@ -27,14 +27,14 @@ const OPPOSITE_DIR = { up: "down", down: "up", left: "right", right: "left" };
 
 // Pre-calculate positions
 const teleportPositions = [];
-const ghostSpawnPositions = [];
+const chaserSpawnPositions = [];
 for (let y = 0; y < ROWS; y++) {
   for (let x = 0; x < COLS; x++) {
     if (MAP[y][x] === 2) teleportPositions.push({ x, y });
-    if (MAP[y][x] === 3) ghostSpawnPositions.push({ x, y });
+    if (MAP[y][x] === 3) chaserSpawnPositions.push({ x, y });
   }
 }
-const pacmanSpawnPositions = [
+const chaseeSpawnPositions = [
   { x: 1, y: 1 },
   { x: 30, y: 1 },
   { x: 1, y: 14 },
@@ -46,32 +46,53 @@ const gameState = {
   players: new Map(), // playerId -> { type, colorIndex, connected, ws, pendingInput }
   nextPlayerId: 0,
   availableColors: {
-    pacman: [0, 1, 2, 3],
-    ghost: [0, 1, 2, 3],
+    chasee: [0, 1, 2, 3],
+    chaser: [0, 1, 2, 3],
   },
-  gameStarted: false,
+  gameStarted: true, // Game is always running
   aiDifficulty: 0.8,
-  // Global speed multipliers for all pacmen and all ghosts (default a bit slower)
-  pacmanSpeed: 0.4,
-  ghostSpeed: 0.4,
-  pacmen: [],
-  ghosts: [],
+  // Global speed multipliers for all chasees and all chasers (default a bit slower)
+  chaseeSpeed: 0.4,
+  chaserSpeed: 0.4,
+  chasees: [],
+  chasers: [],
+  items: [], // Collectible items on the map { x, y, collected: boolean }
   lastUpdate: Date.now(),
 };
 
 // Debug counters
 let debugTickCounter = 0;
 
-function isPacmanPlayerControlled(index) {
-  return Array.from(gameState.players.values()).some((p) => p.type === "pacman" && p.colorIndex === index && p.connected);
+function isChaseePlayerControlled(index) {
+  return Array.from(gameState.players.values()).some((p) => p.type === "chasee" && p.colorIndex === index && p.connected);
 }
 
 // Initialize lastUpdate
 gameState.lastUpdate = Date.now();
 
+// Initialize collectible items on the map
+function initItems() {
+  gameState.items = [];
+  // Place items on all path tiles (excluding spawn positions and teleports)
+  for (let y = 0; y < ROWS; y++) {
+    for (let x = 0; x < COLS; x++) {
+      const cellType = MAP[y][x];
+      // Place items on regular paths (0), but not on teleports (2) or spawns (3)
+      if (cellType === 0) {
+        // Skip spawn positions
+        const isSpawn =
+          chaseeSpawnPositions.some((pos) => pos.x === x && pos.y === y) || chaserSpawnPositions.some((pos) => pos.x === x && pos.y === y);
+        if (!isSpawn) {
+          gameState.items.push({ x, y, collected: false });
+        }
+      }
+    }
+  }
+}
+
 // Initialize characters
 function initCharacters() {
-  gameState.pacmen = pacmanSpawnPositions.map((pos, i) => ({
+  gameState.chasees = chaseeSpawnPositions.map((pos, i) => ({
     x: pos.x,
     y: pos.y,
     px: pos.x * CELL_SIZE + CHARACTER_OFFSET,
@@ -79,10 +100,10 @@ function initCharacters() {
     targetX: pos.x,
     targetY: pos.y,
     color: COLORS[i],
-    // Default pacman speed (kept in sync with global pacmanSpeed)
+    // Default chasee speed (kept in sync with global chaseeSpeed)
     speed: 1.0,
     spawnPos: { ...pos },
-    // Direction-based movement: current direction the pacman is actually moving
+    // Direction-based movement: current direction the chasee is actually moving
     dirX: 0,
     dirY: 0,
     // Queued direction from the last input (may be applied at the next junction)
@@ -94,9 +115,10 @@ function initCharacters() {
     // Survival time tracking for scoring
     survivalStartTime: null, // When the current survival period started
     lastSurvivalPointTime: null, // When we last awarded a survival point
+    itemsCollected: 0, // Number of collectible items collected this round
   }));
 
-  gameState.ghosts = ghostSpawnPositions.slice(0, 4).map((pos, i) => {
+  gameState.chasers = chaserSpawnPositions.slice(0, 4).map((pos, i) => {
     // Find initial direction
     let initialTargetX = pos.x;
     let initialTargetY = pos.y;
@@ -121,7 +143,8 @@ function initCharacters() {
       targetX: initialTargetX,
       targetY: initialTargetY,
       color: COLORS[i],
-      // Keep ghosts at base speed; overridden by global ghostSpeed multiplier
+      // Keep chasers at base speed; overridden by global chaserSpeed multiplier
+      roundsCompleted: 0, // Track rounds for speed increase
       speed: 1.0,
       spawnPos: { ...pos },
       moveTimer: 0,
@@ -190,7 +213,7 @@ function teleportCharacter(character) {
   }
 }
 
-function getPossibleMoves(ghost) {
+function getPossibleMoves(chaser) {
   const possibleMoves = [];
   const currentX = ghost.x;
   const currentY = ghost.y;
@@ -241,11 +264,11 @@ function calculateDistanceWithWrap(pos1, pos2) {
   return Math.sqrt(dx * dx + dy * dy);
 }
 
-function determineBestMove(ghost, possibleMoves, targetPacman) {
-  if (!targetPacman || possibleMoves.length === 0) return possibleMoves[0];
+function determineBestMove(chaser, possibleMoves, targetChasee) {
+  if (!targetChasee || possibleMoves.length === 0) return possibleMoves[0];
   let bestMove = null;
   let bestScore = -Infinity;
-  const targetPos = { x: targetPacman.x, y: targetPacman.y };
+  const targetPos = { x: targetChasee.x, y: targetChasee.y };
 
   possibleMoves.forEach((move) => {
     const movePos = { x: move.newX, y: move.newY };
@@ -269,8 +292,8 @@ function determineBestMove(ghost, possibleMoves, targetPacman) {
 }
 
 // Simple AI for pacmen: choose a direction that tends to increase distance from the same-colored ghost
-function movePacmanAI(pacman, index) {
-  const ghost = gameState.ghosts[index];
+function moveChaseeAI(chasee, index) {
+  const chaser = gameState.chasers[index];
   const possibleMoves = getPossibleMoves(pacman);
   if (possibleMoves.length === 0) return;
 
@@ -312,7 +335,7 @@ function movePacmanAI(pacman, index) {
   }
 }
 
-function moveGhostAI(ghost) {
+function moveChaserAI(chaser) {
   ghost.x = ghost.targetX;
   ghost.y = ghost.targetY;
   if (!ghost.positionHistory) ghost.positionHistory = [];
@@ -362,32 +385,63 @@ function continueInCurrentDirection(ghost) {
 }
 
 function checkCollisions() {
-  gameState.pacmen.forEach((pacman, pacmanIndex) => {
-    if (!pacman) return;
-    gameState.ghosts.forEach((ghost, ghostIndex) => {
-      if (!ghost) return;
-      if (pacman.color === ghost.color && pacman.x === ghost.x && pacman.y === ghost.y) {
-        // Award point to the chaser (ghost player)
-        const ghostPlayer = Array.from(gameState.players.entries()).find(
-          ([id, p]) => p.type === "ghost" && p.colorIndex === ghostIndex && p.connected
+  gameState.chasees.forEach((chasee, chaseeIndex) => {
+    if (!chasee) return;
+    gameState.chasers.forEach((chaser, chaserIndex) => {
+      if (!chaser) return;
+      if (chasee.color === chaser.color && chasee.x === chaser.x && chasee.y === chaser.y) {
+        // Capture happened - end round for both players
+        const chaserPlayer = Array.from(gameState.players.entries()).find(
+          ([id, p]) => p.type === "chaser" && p.colorIndex === chaserIndex && p.connected
         );
-        if (ghostPlayer) {
-          const [playerId, player] = ghostPlayer;
-          player.stats.chaserScore++;
+        const chaseePlayer = Array.from(gameState.players.entries()).find(
+          ([id, p]) => p.type === "chasee" && p.colorIndex === chaseeIndex && p.connected
+        );
+
+        // Update chaser score: add time to catch
+        if (chaserPlayer && chaseePlayer) {
+          const [chaserPlayerId, chaserPlayerData] = chaserPlayer;
+          const [chaseePlayerId, chaseePlayerData] = chaseePlayer;
+
+          // Calculate capture time (time since round started)
+          if (chaserPlayerData.stats.currentRoundStartTime) {
+            const captureTime = Date.now() - chaserPlayerData.stats.currentRoundStartTime;
+            chaserPlayerData.stats.totalCaptureTime += captureTime;
+            // Chaser score is total time (lower is better, but we'll display it)
+            chaserPlayerData.stats.chaserScore = chaserPlayerData.stats.totalCaptureTime;
+          }
+
+          // Update chasee score: add items collected this round
+          if (chaseePlayerData.stats && chasee.itemsCollected !== undefined) {
+            chaseePlayerData.stats.itemsCollected += chasee.itemsCollected;
+            // Chasee score = total items collected
+            chaseePlayerData.stats.chaseeScore = chaseePlayerData.stats.itemsCollected;
+          }
+        }
+
+        // End round for both players
+        if (chaserPlayer) {
+          const [playerId, player] = chaserPlayer;
           player.stats.rounds++;
 
-          // Check if player completed 10 rounds
+          // Increase chaser speed by 1% per round
+          const chaser = gameState.chasers[chaserIndex];
+          if (chaser) {
+            chaser.roundsCompleted = (chaser.roundsCompleted || 0) + 1;
+            // Speed multiplier: 1.0 + (rounds * 0.01) = 1% per round
+            chaser.speedMultiplier = 1.0 + chaser.roundsCompleted * 0.01;
+          }
+
           if (player.stats.rounds >= 10) {
-            player.stats.currentRoundStartTime = null; // Stop tracking
+            player.stats.currentRoundStartTime = null;
             player.ws.send(
               JSON.stringify({
                 type: "roundsComplete",
                 chaserScore: player.stats.chaserScore,
-                chaseeScore: player.stats.chaseeScore,
+                chaseeScore: player.stats.chaseeScore || 0,
                 totalRounds: player.stats.rounds,
               })
             );
-            // Kick player out - character goes back to AI
             kickPlayerFromCharacter(playerId);
           } else {
             // Start new round
@@ -395,61 +449,36 @@ function checkCollisions() {
           }
         }
 
-        // Award point to the chasee (pacman player) if they survived 20+ seconds
-        const pacmanPlayer = Array.from(gameState.players.entries()).find(
-          ([id, p]) => p.type === "pacman" && p.colorIndex === pacmanIndex && p.connected
-        );
-        if (pacmanPlayer && pacman.survivalStartTime) {
-          const [playerId, player] = pacmanPlayer;
-          const survivalTime = (Date.now() - pacman.survivalStartTime) / 1000;
-          if (survivalTime >= 20) {
-            player.stats.chaseeScore++;
-            player.stats.rounds++;
+        if (chaseePlayer) {
+          const [playerId, player] = chaseePlayer;
+          player.stats.rounds++;
 
-            // Check if player completed 10 rounds
-            if (player.stats.rounds >= 10) {
-              player.stats.currentRoundStartTime = null; // Stop tracking
-              player.ws.send(
-                JSON.stringify({
-                  type: "roundsComplete",
-                  chaserScore: player.stats.chaserScore,
-                  chaseeScore: player.stats.chaseeScore,
-                  totalRounds: player.stats.rounds,
-                })
-              );
-              // Kick player out - character goes back to AI
-              kickPlayerFromCharacter(playerId);
-            } else {
-              // Start new round
-              player.stats.currentRoundStartTime = Date.now();
-            }
+          if (player.stats.rounds >= 10) {
+            player.stats.currentRoundStartTime = null;
+            player.ws.send(
+              JSON.stringify({
+                type: "roundsComplete",
+                chaserScore: player.stats.chaserScore || 0,
+                chaseeScore: player.stats.chaseeScore,
+                totalRounds: player.stats.rounds,
+              })
+            );
+            kickPlayerFromCharacter(playerId);
           } else {
-            // They didn't survive 20 seconds, just start new round
-            player.stats.rounds++;
-            if (player.stats.rounds < 10) {
-              player.stats.currentRoundStartTime = Date.now();
-            } else {
-              player.stats.currentRoundStartTime = null;
-              player.ws.send(
-                JSON.stringify({
-                  type: "roundsComplete",
-                  chaserScore: player.stats.chaserScore,
-                  chaseeScore: player.stats.chaseeScore,
-                  totalRounds: player.stats.rounds,
-                })
-              );
-              // Kick player out - character goes back to AI
-              kickPlayerFromCharacter(playerId);
-            }
+            // Start new round
+            player.stats.currentRoundStartTime = Date.now();
           }
         }
 
-        // Reset survival tracking
-        pacman.survivalStartTime = Date.now();
-        pacman.lastSurvivalPointTime = null;
+        // Reset survival tracking and items for new round
+        chasee.survivalStartTime = Date.now();
+        chasee.lastSurvivalPointTime = null;
+        chasee.itemsCollected = 0;
+        // Respawn all items for new round
+        gameState.items.forEach((item) => (item.collected = false));
 
-        respawnCharacter(pacman, pacman.spawnPos);
-        respawnGhost(ghost, ghost.spawnPos);
+        respawnCharacter(chasee, chasee.spawnPos);
+        respawnChaser(chaser, chaser.spawnPos);
       }
     });
   });
@@ -476,8 +505,8 @@ function respawnCharacter(character, spawnPos) {
   }
 }
 
-function respawnGhost(ghost, spawnPos) {
-  respawnCharacter(ghost, spawnPos);
+function respawnChaser(chaser, spawnPos) {
+  respawnCharacter(chaser, spawnPos);
   ghost.moveTimer = 0;
   ghost.positionHistory = [];
   ghost.lastDirX = 0;
@@ -578,27 +607,73 @@ function gameLoop() {
 
     const isPlayerControlledPacman = isPacmanPlayerControlled(index);
 
-    // Initialize survival tracking when game starts
-    if (gameState.gameStarted && isPlayerControlledPacman && !pacman.survivalStartTime) {
-      pacman.survivalStartTime = Date.now();
-      pacman.lastSurvivalPointTime = null;
+    // Initialize round tracking when player joins
+    if (isPlayerControlledPacman) {
+      const pacmanPlayer = Array.from(gameState.players.entries()).find(
+        ([id, p]) => p.type === "pacman" && p.colorIndex === index && p.connected
+      );
+      if (pacmanPlayer) {
+        const [playerId, player] = pacmanPlayer;
+        // Initialize round start time if not set
+        if (!player.stats.currentRoundStartTime) {
+          player.stats.currentRoundStartTime = Date.now();
+          pacman.survivalStartTime = Date.now();
+          pacman.itemsCollected = 0;
+        }
+
+        // Check if 30 seconds have passed (round ends at 30s OR capture)
+        if (player.stats.currentRoundStartTime) {
+          const roundTime = (Date.now() - player.stats.currentRoundStartTime) / 1000;
+          if (roundTime >= 30) {
+            // Round ended by time (30 seconds) - chasee survived
+            // Update chasee score with items collected this round
+            player.stats.itemsCollected += pacman.itemsCollected || 0;
+            player.stats.chaseeScore = player.stats.itemsCollected;
+            player.stats.rounds++;
+
+            // Check if player completed 10 rounds
+            if (player.stats.rounds >= 10) {
+              player.stats.currentRoundStartTime = null;
+              player.ws.send(
+                JSON.stringify({
+                  type: "roundsComplete",
+                  chaserScore: player.stats.chaserScore || 0,
+                  chaseeScore: player.stats.chaseeScore,
+                  totalRounds: player.stats.rounds,
+                })
+              );
+              kickPlayerFromCharacter(playerId);
+            } else {
+              // Start new round
+              player.stats.currentRoundStartTime = Date.now();
+              pacman.survivalStartTime = Date.now();
+              pacman.itemsCollected = 0;
+              // Respawn all items for new round
+              gameState.items.forEach((item) => (item.collected = false));
+            }
+          }
+        }
+      }
     }
 
-    // Check survival time and award points
-    if (gameState.gameStarted && isPlayerControlledPacman && pacman.survivalStartTime) {
-      const survivalTime = (Date.now() - pacman.survivalStartTime) / 1000;
-      // Award point every 20 seconds
-      if (survivalTime >= 20 && (!pacman.lastSurvivalPointTime || Date.now() - pacman.lastSurvivalPointTime >= 20000)) {
-        const pacmanPlayer = Array.from(gameState.players.entries()).find(
-          ([id, p]) => p.type === "pacman" && p.colorIndex === index && p.connected
-        );
-        if (pacmanPlayer) {
-          const [playerId, player] = pacmanPlayer;
-          if (player.stats.rounds < 10) {
-            player.stats.chaseeScore++;
+    // Also check for chaser (ghost) 30-second rounds
+    const isPlayerControlledGhost = Array.from(gameState.players.values()).some(
+      (p) => p.type === "ghost" && p.colorIndex === index && p.connected
+    );
+    if (isPlayerControlledGhost) {
+      const ghostPlayer = Array.from(gameState.players.entries()).find(
+        ([id, p]) => p.type === "ghost" && p.colorIndex === index && p.connected
+      );
+      if (ghostPlayer) {
+        const [playerId, player] = ghostPlayer;
+        if (player.stats.currentRoundStartTime) {
+          const roundTime = (Date.now() - player.stats.currentRoundStartTime) / 1000;
+          if (roundTime >= 30) {
+            // Round ended by time (30 seconds) - chasee survived, chaser didn't catch
+            // Chaser gets penalty (add 30 seconds to total time)
+            player.stats.totalCaptureTime += 30000;
+            player.stats.chaserScore = player.stats.totalCaptureTime;
             player.stats.rounds++;
-            pacman.lastSurvivalPointTime = Date.now();
-            pacman.survivalStartTime = Date.now(); // Reset for next 20 seconds
 
             // Check if player completed 10 rounds
             if (player.stats.rounds >= 10) {
@@ -607,17 +682,27 @@ function gameLoop() {
                 JSON.stringify({
                   type: "roundsComplete",
                   chaserScore: player.stats.chaserScore,
-                  chaseeScore: player.stats.chaseeScore,
+                  chaseeScore: player.stats.chaseeScore || 0,
                   totalRounds: player.stats.rounds,
                 })
               );
-              // Kick player out - character goes back to AI
               kickPlayerFromCharacter(playerId);
             } else {
+              // Start new round
               player.stats.currentRoundStartTime = Date.now();
             }
           }
         }
+      }
+    }
+
+    // Check for item collection (chasees collect items)
+    if (isPlayerControlledPacman) {
+      // Check if pacman is on a tile with an item
+      const item = gameState.items.find((item) => !item.collected && item.x === pacman.x && item.y === pacman.y);
+      if (item) {
+        item.collected = true;
+        pacman.itemsCollected = (pacman.itemsCollected || 0) + 1;
       }
     }
 
@@ -671,8 +756,9 @@ function gameLoop() {
       (p) => p.type === "ghost" && p.colorIndex === index && p.connected
     );
 
-    // All ghosts move with global ghost speed
-    moveCharacter(ghost, gameState.ghostSpeed);
+    // All chasers move with global chaser speed, multiplied by rounds completed
+    const speedMultiplier = ghost.speedMultiplier || 1.0;
+    moveCharacter(ghost, gameState.chaserSpeed * speedMultiplier);
 
     if (!isAtTarget(ghost)) {
       return;
@@ -763,6 +849,7 @@ const server = http.createServer((req, res) => {
   const mimeTypes = {
     ".html": "text/html",
     ".js": "text/javascript",
+    ".mjs": "text/javascript",
     ".css": "text/css",
     ".json": "application/json",
     ".png": "image/png",
@@ -881,10 +968,12 @@ function handleJoin(ws, playerId, data) {
   // If this player was already controlling a character, free up their old color now that the new join is valid
   const existing = gameState.players.get(playerId);
   let playerStats = {
-    chaserScore: 0, // Points as ghost (chaser)
-    chaseeScore: 0, // Points as pacman (chasee)
+    chaserScore: 0, // Total time to catch chasee (in milliseconds, lower is better)
+    chaseeScore: 0, // Points based on evasion + items collected
     rounds: 0, // Total rounds completed
     currentRoundStartTime: null, // When current round started
+    totalCaptureTime: 0, // Total time spent capturing (for chaser scoring)
+    itemsCollected: 0, // Total items collected across all rounds
   };
   if (existing) {
     const prevList = gameState.availableColors[existing.type];
@@ -898,6 +987,9 @@ function handleJoin(ws, playerId, data) {
     }
   }
 
+  // Get player initials/name from data
+  const playerName = data.playerName || "AI"; // Default to "AI" if not provided
+
   gameState.players.set(playerId, {
     type: characterType,
     colorIndex: colorIndex,
@@ -905,16 +997,16 @@ function handleJoin(ws, playerId, data) {
     ws: ws,
     pendingInput: null,
     stats: playerStats,
+    playerName: playerName, // 3-letter initials
   });
 
   // Start a new round when joining
-  if (gameState.gameStarted) {
-    playerStats.currentRoundStartTime = Date.now();
-    // Reset survival tracking for the character they're controlling
-    if (characterType === "pacman" && gameState.pacmen[colorIndex]) {
-      gameState.pacmen[colorIndex].survivalStartTime = Date.now();
-      gameState.pacmen[colorIndex].lastSurvivalPointTime = null;
-    }
+  playerStats.currentRoundStartTime = Date.now();
+  // Reset survival tracking and items for the character they're controlling
+  if (characterType === "pacman" && gameState.pacmen[colorIndex]) {
+    gameState.pacmen[colorIndex].survivalStartTime = Date.now();
+    gameState.pacmen[colorIndex].lastSurvivalPointTime = null;
+    gameState.pacmen[colorIndex].itemsCollected = 0;
   }
 
   const colorIdx = availableColors.indexOf(colorIndex);
@@ -996,6 +1088,7 @@ function sendGameState(ws) {
     type: player.type,
     colorIndex: player.colorIndex,
     connected: player.connected,
+    playerName: player.playerName || "AI",
     stats: player.stats
       ? {
           chaserScore: player.stats.chaserScore,
@@ -1014,6 +1107,7 @@ function sendGameState(ws) {
         ghost: [...gameState.availableColors.ghost],
       },
       gameStarted: gameState.gameStarted,
+      items: gameState.items.map((item) => ({ x: item.x, y: item.y, collected: item.collected })),
       positions: {
         pacmen: gameState.pacmen.map((p) => ({
           x: p.x,
@@ -1044,6 +1138,7 @@ function broadcastGameState() {
     type: player.type,
     colorIndex: player.colorIndex,
     connected: player.connected,
+    playerName: player.playerName || "AI",
     stats: player.stats
       ? {
           chaserScore: player.stats.chaserScore,
@@ -1061,6 +1156,7 @@ function broadcastGameState() {
       ghost: [...gameState.availableColors.ghost],
     },
     gameStarted: gameState.gameStarted,
+    items: gameState.items.map((item) => ({ x: item.x, y: item.y, collected: item.collected })),
     positions: {
       pacmen: gameState.pacmen.map((p) => ({
         x: p.x,
@@ -1085,6 +1181,7 @@ function broadcastGameState() {
 }
 
 // ========== START SERVER ==========
+initItems();
 initCharacters();
 setInterval(gameLoop, 16); // ~60fps game loop
 

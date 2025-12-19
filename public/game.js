@@ -135,9 +135,21 @@ let inputDirY = 0;
 
 // Game control functions
 function startGame() {
+  // Start the game cycle
   if (multiplayerMode && ws && ws.readyState === WebSocket.OPEN) {
     ws.send(JSON.stringify({ type: "startGame" }));
-  } else {
+  }
+}
+
+function startPlayerSession() {
+  // Start playing with selected character
+  if (!myCharacterType || myColorIndex === null) {
+    alert("Please select a character first!");
+    return;
+  }
+  if (multiplayerMode && ws && ws.readyState === WebSocket.OPEN) {
+    // The game is always running, so this just confirms the player is ready
+    // The server already tracks the player when they join
   }
 }
 
@@ -271,6 +283,11 @@ function handleServerMessage(data) {
       } else {
         selectCharacter("ghost", colorName);
       }
+
+      // Show Start button now that character is selected
+      if (window.startController) {
+        window.startController.show();
+      }
       break;
     }
     case "joinFailed":
@@ -341,6 +358,10 @@ function handleServerMessage(data) {
       });
       currentPacman = null;
       currentGhost = null;
+      // Hide Start button
+      if (window.startController) {
+        window.startController.hide();
+      }
       // Update score display
       updateScoreDisplay();
       break;
@@ -465,16 +486,46 @@ function updateAvailableColors(availableColors) {
       }
     });
   }
+
+  // Check if all slots are full (queue needed)
+  const allPacmenFull = !availableColors.pacman || availableColors.pacman.length === 0;
+  const allGhostsFull = !availableColors.ghost || availableColors.ghost.length === 0;
+  const allSlotsFull = allPacmenFull && allGhostsFull;
+
+  // Show/hide Join Queue button based on availability
+  if (window.joinQueueController) {
+    if (allSlotsFull) {
+      window.joinQueueController.show();
+    } else {
+      window.joinQueueController.hide();
+    }
+  }
+
+  // Show/hide Start button based on character selection
+  if (window.startController) {
+    if (myCharacterType && myColorIndex !== null) {
+      window.startController.show();
+    } else {
+      window.startController.hide();
+    }
+  }
 }
 
 // Position updates are no longer sent - server is authoritative
 
 // Join as a character
-function joinAsCharacter(characterType, colorIndex) {
+function joinAsCharacter(characterType, colorIndex, playerName = "AI") {
   // If we're already this character, don't re-join
   if (myCharacterType === characterType && myColorIndex === colorIndex) {
     return;
   }
+
+  // Validate and sanitize player name (3 uppercase letters)
+  const sanitized =
+    playerName
+      .toUpperCase()
+      .replace(/[^A-Z]/g, "")
+      .slice(0, 3) || "AI";
 
   if (ws && ws.readyState === WebSocket.OPEN) {
     ws.send(
@@ -482,8 +533,20 @@ function joinAsCharacter(characterType, colorIndex) {
         type: "join",
         characterType: characterType,
         colorIndex: colorIndex,
+        playerName: sanitized,
       })
     );
+  }
+}
+
+// Join queue after completing 10 rounds
+function joinQueue() {
+  // Queue system: wait for an available slot
+  // For now, just show a message - full queue system to be implemented
+  if (ws && ws.readyState === WebSocket.OPEN) {
+    // Request current game state to check availability
+    ws.send(JSON.stringify({ type: "gameState" }));
+    alert("You're in the queue! Waiting for an available slot...");
   }
 }
 
@@ -522,15 +585,46 @@ function init() {
       difficulty: 0.8,
       pacmanSpeed: 0.4,
       ghostSpeed: 0.4,
-      playerType: "Pacman",
-      playerColor: "Red",
-      start: () => startGame(),
-      restart: () => restartGame(),
+      playerInitials: "ABC", // 3-letter initials
+      startGameCycle: () => startGame(),
+      resetGameCycle: () => restartGame(),
+      start: () => startPlayerSession(),
+      joinQueue: () => joinQueue(),
     };
 
     // Main controls at root (no folders)
-    gui.add(guiParams, "start").name("Start game cycle");
-    gui.add(guiParams, "restart").name("Reset game cycle");
+    gui
+      .add(guiParams, "playerInitials")
+      .name("Initials (3 letters)")
+      .onChange((value) => {
+        // Validate and sanitize to 3 uppercase letters
+        const sanitized = value
+          .toUpperCase()
+          .replace(/[^A-Z]/g, "")
+          .slice(0, 3);
+        guiParams.playerInitials = sanitized;
+        if (value !== sanitized) {
+          // Update the GUI control if value was changed
+          const controllers = gui.controllers;
+          const initialsCtrl = controllers.find((c) => c.property === "playerInitials");
+          if (initialsCtrl) initialsCtrl.updateDisplay();
+        }
+      });
+
+    // Game cycle controls
+    gui.add(guiParams, "startGameCycle").name("Start game cycle");
+    gui.add(guiParams, "resetGameCycle").name("Reset game cycle");
+
+    // Link to 3D version
+    gui.add({ open3D: () => window.open("/3d.html", "_blank") }, "open3D").name("Open 3D View");
+
+    // Start button (shown when character is selected)
+    window.startController = gui.add(guiParams, "start").name("Start");
+    window.startController.hide(); // Hidden until character is selected
+
+    // Join Queue button (only shown when all slots are full)
+    window.joinQueueController = gui.add(guiParams, "joinQueue").name("Join Queue");
+    window.joinQueueController.hide(); // Hidden by default
 
     gui
       .add(guiParams, "serverTarget", ["Render", "Local"])
@@ -569,20 +663,20 @@ function init() {
 
     COLORS.forEach((color, i) => {
       const colorName = color.charAt(0).toUpperCase() + color.slice(1);
-      const pacmanKey = `Pacman ${colorName}`;
-      const ghostKey = `Ghost ${colorName}`;
+      const chaseeKey = `${colorName} Chasee`;
+      const chaserKey = `${colorName} Chaser`;
 
-      joinActions[pacmanKey] = () => {
-        joinAsCharacter("pacman", i);
+      joinActions[chaseeKey] = () => {
+        joinAsCharacter("pacman", i, guiParams.playerInitials);
       };
-      joinActions[ghostKey] = () => {
-        joinAsCharacter("ghost", i);
+      joinActions[chaserKey] = () => {
+        joinAsCharacter("ghost", i, guiParams.playerInitials);
       };
 
-      const pacCtrl = gui.add(joinActions, pacmanKey);
-      const ghostCtrl = gui.add(joinActions, ghostKey);
-      window.characterControllers.pacman[i] = pacCtrl;
-      window.characterControllers.ghost[i] = ghostCtrl;
+      const chaseeCtrl = gui.add(joinActions, chaseeKey);
+      const chaserCtrl = gui.add(joinActions, chaserKey);
+      window.characterControllers.pacman[i] = chaseeCtrl;
+      window.characterControllers.ghost[i] = chaserCtrl;
     });
 
     // Score display
