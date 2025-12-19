@@ -36,6 +36,3 @@
 
   return { MAP, COLS, ROWS, TUNNEL_ROW };
 });
-
-
-

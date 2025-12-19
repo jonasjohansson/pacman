@@ -375,16 +375,18 @@ function checkCollisions() {
           const [playerId, player] = ghostPlayer;
           player.stats.chaserScore++;
           player.stats.rounds++;
-          
+
           // Check if player completed 10 rounds
           if (player.stats.rounds >= 10) {
             player.stats.currentRoundStartTime = null; // Stop tracking
-            player.ws.send(JSON.stringify({ 
-              type: "roundsComplete", 
-              chaserScore: player.stats.chaserScore,
-              chaseeScore: player.stats.chaseeScore,
-              totalRounds: player.stats.rounds
-            }));
+            player.ws.send(
+              JSON.stringify({
+                type: "roundsComplete",
+                chaserScore: player.stats.chaserScore,
+                chaseeScore: player.stats.chaseeScore,
+                totalRounds: player.stats.rounds,
+              })
+            );
           } else {
             // Start new round
             player.stats.currentRoundStartTime = Date.now();
@@ -401,16 +403,18 @@ function checkCollisions() {
           if (survivalTime >= 20) {
             player.stats.chaseeScore++;
             player.stats.rounds++;
-            
+
             // Check if player completed 10 rounds
             if (player.stats.rounds >= 10) {
               player.stats.currentRoundStartTime = null; // Stop tracking
-              player.ws.send(JSON.stringify({ 
-                type: "roundsComplete", 
-                chaserScore: player.stats.chaserScore,
-                chaseeScore: player.stats.chaseeScore,
-                totalRounds: player.stats.rounds
-              }));
+              player.ws.send(
+                JSON.stringify({
+                  type: "roundsComplete",
+                  chaserScore: player.stats.chaserScore,
+                  chaseeScore: player.stats.chaseeScore,
+                  totalRounds: player.stats.rounds,
+                })
+              );
             } else {
               // Start new round
               player.stats.currentRoundStartTime = Date.now();
@@ -422,12 +426,14 @@ function checkCollisions() {
               player.stats.currentRoundStartTime = Date.now();
             } else {
               player.stats.currentRoundStartTime = null;
-              player.ws.send(JSON.stringify({ 
-                type: "roundsComplete", 
-                chaserScore: player.stats.chaserScore,
-                chaseeScore: player.stats.chaseeScore,
-                totalRounds: player.stats.rounds
-              }));
+              player.ws.send(
+                JSON.stringify({
+                  type: "roundsComplete",
+                  chaserScore: player.stats.chaserScore,
+                  chaseeScore: player.stats.chaseeScore,
+                  totalRounds: player.stats.rounds,
+                })
+              );
             }
           }
         }
@@ -576,7 +582,7 @@ function gameLoop() {
     if (gameState.gameStarted && isPlayerControlledPacman && pacman.survivalStartTime) {
       const survivalTime = (Date.now() - pacman.survivalStartTime) / 1000;
       // Award point every 20 seconds
-      if (survivalTime >= 20 && (!pacman.lastSurvivalPointTime || (Date.now() - pacman.lastSurvivalPointTime) >= 20000)) {
+      if (survivalTime >= 20 && (!pacman.lastSurvivalPointTime || Date.now() - pacman.lastSurvivalPointTime >= 20000)) {
         const pacmanPlayer = Array.from(gameState.players.entries()).find(
           ([id, p]) => p.type === "pacman" && p.colorIndex === index && p.connected
         );
@@ -587,16 +593,18 @@ function gameLoop() {
             player.stats.rounds++;
             pacman.lastSurvivalPointTime = Date.now();
             pacman.survivalStartTime = Date.now(); // Reset for next 20 seconds
-            
+
             // Check if player completed 10 rounds
             if (player.stats.rounds >= 10) {
               player.stats.currentRoundStartTime = null;
-              player.ws.send(JSON.stringify({ 
-                type: "roundsComplete", 
-                chaserScore: player.stats.chaserScore,
-                chaseeScore: player.stats.chaseeScore,
-                totalRounds: player.stats.rounds
-              }));
+              player.ws.send(
+                JSON.stringify({
+                  type: "roundsComplete",
+                  chaserScore: player.stats.chaserScore,
+                  chaseeScore: player.stats.chaseeScore,
+                  totalRounds: player.stats.rounds,
+                })
+              );
             } else {
               player.stats.currentRoundStartTime = Date.now();
             }
@@ -811,6 +819,17 @@ wss.on("connection", (ws, req) => {
           break;
         case "startGame":
           gameState.gameStarted = true;
+          // Initialize survival tracking for all player-controlled pacmen
+          gameState.players.forEach((player, playerId) => {
+            if (player.connected && player.type === "pacman" && gameState.pacmen[player.colorIndex]) {
+              const pacman = gameState.pacmen[player.colorIndex];
+              pacman.survivalStartTime = Date.now();
+              pacman.lastSurvivalPointTime = null;
+              if (player.stats) {
+                player.stats.currentRoundStartTime = Date.now();
+              }
+            }
+          });
           // Force ghosts to get new directions immediately
           gameState.ghosts.forEach((ghost) => {
             if (ghost && isAtTarget(ghost)) {
@@ -829,8 +848,7 @@ wss.on("connection", (ws, req) => {
           break;
         default:
       }
-    } catch (error) {
-    }
+    } catch (error) {}
   });
 
   ws.on("close", () => {
@@ -854,22 +872,23 @@ function handleJoin(ws, playerId, data) {
 
   // If this player was already controlling a character, free up their old color now that the new join is valid
   const existing = gameState.players.get(playerId);
+  let playerStats = {
+    chaserScore: 0, // Points as ghost (chaser)
+    chaseeScore: 0, // Points as pacman (chasee)
+    rounds: 0, // Total rounds completed
+    currentRoundStartTime: null, // When current round started
+  };
   if (existing) {
     const prevList = gameState.availableColors[existing.type];
     if (prevList && !prevList.includes(existing.colorIndex)) {
       prevList.push(existing.colorIndex);
       prevList.sort();
     }
+    // Preserve stats when switching characters
+    if (existing.stats) {
+      playerStats = existing.stats;
+    }
   }
-
-  // Initialize or get player stats
-  const existingPlayer = gameState.players.get(playerId);
-  const playerStats = existingPlayer?.stats || {
-    chaserScore: 0, // Points as ghost (chaser)
-    chaseeScore: 0, // Points as pacman (chasee)
-    rounds: 0, // Total rounds completed
-    currentRoundStartTime: null, // When current round started
-  };
 
   gameState.players.set(playerId, {
     type: characterType,
@@ -952,6 +971,13 @@ function sendGameState(ws) {
     type: player.type,
     colorIndex: player.colorIndex,
     connected: player.connected,
+    stats: player.stats
+      ? {
+          chaserScore: player.stats.chaserScore,
+          chaseeScore: player.stats.chaseeScore,
+          rounds: player.stats.rounds,
+        }
+      : null,
   }));
 
   ws.send(
@@ -993,6 +1019,13 @@ function broadcastGameState() {
     type: player.type,
     colorIndex: player.colorIndex,
     connected: player.connected,
+    stats: player.stats
+      ? {
+          chaserScore: player.stats.chaserScore,
+          chaseeScore: player.stats.chaseeScore,
+          rounds: player.stats.rounds,
+        }
+      : null,
   }));
 
   broadcast({
@@ -1030,5 +1063,4 @@ function broadcastGameState() {
 initCharacters();
 setInterval(gameLoop, 16); // ~60fps game loop
 
-server.listen(PORT, () => {
-});
+server.listen(PORT, () => {});

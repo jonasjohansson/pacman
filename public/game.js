@@ -287,9 +287,12 @@ function handleServerMessage(data) {
             connectedPlayers.set(player.playerId, {
               type: player.type,
               colorIndex: player.colorIndex,
+              stats: player.stats || null,
             });
           }
         });
+        // Update score display if we have stats
+        updateScoreDisplay();
       }
       // Update GUI with available colors
       if (data.availableColors) {
@@ -347,6 +350,15 @@ function handleServerMessage(data) {
       }
       break;
     case "playerLeft":
+      break;
+    case "roundsComplete":
+      // Show alert when current player completes 10 rounds
+      // The server sends this message directly to the player's WebSocket, so if we receive it, it's for us
+      alert(
+        `You've completed 10 rounds!\n\nChaser Score: ${data.chaserScore}\nChasee Score: ${data.chaseeScore}\nTotal Rounds: ${data.totalRounds}`
+      );
+      // Update score display
+      updateScoreDisplay();
       break;
   }
 }
@@ -441,6 +453,17 @@ function sendInput(input) {
 }
 
 // Update GUI with available colors from server
+function updateScoreDisplay() {
+  if (!window.scoreDisplay || !myPlayerId) return;
+
+  const myPlayer = connectedPlayers.get(myPlayerId);
+  if (myPlayer && myPlayer.stats) {
+    window.scoreDisplay.chaserScore.setValue(myPlayer.stats.chaserScore || 0);
+    window.scoreDisplay.chaseeScore.setValue(myPlayer.stats.chaseeScore || 0);
+    window.scoreDisplay.rounds.setValue(myPlayer.stats.rounds || 0);
+  }
+}
+
 function updateAvailableColors(availableColors) {
   // Update character selection controllers (radio-like) based on availability
   if (window.characterControllers) {
@@ -579,6 +602,13 @@ function init() {
       window.characterControllers.pacman[i] = pacCtrl;
       window.characterControllers.ghost[i] = ghostCtrl;
     });
+
+    // Score display
+    window.scoreDisplay = {
+      chaserScore: gui.add({ value: 0 }, "value").name("Chaser Score").disable(),
+      chaseeScore: gui.add({ value: 0 }, "value").name("Chasee Score").disable(),
+      rounds: gui.add({ value: 0 }, "value").name("Rounds").disable(),
+    };
   }
   const maze = document.getElementById("maze");
   maze.style.width = COLS * CELL_SIZE + "px";
@@ -1297,4 +1327,3 @@ if (document.readyState === "loading") {
   setTimeout(setupDomeEntry, 200);
   setTimeout(setupCanvasDragDrop, 200);
 }
-
