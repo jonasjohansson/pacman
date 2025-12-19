@@ -99,8 +99,8 @@ function respawnGhost(ghost, spawnPos) {
 // Game state
 let pacmen = [];
 let ghosts = [];
-let currentPacman = 0;
-let currentGhost = null; // null means controlling a pacman, otherwise index of controlled ghost
+let currentPacman = null; // null means no character selected
+let currentGhost = null; // null means no character selected
 let playerType = "pacman"; // "pacman" or "ghost"
 let aiDifficulty = 0.8; // 0 = easy, 1 = hard
 let survivalTimeThreshold = 30; // seconds - ghost gets point after surviving this long
@@ -164,7 +164,7 @@ function selectCharacter(type, colorName) {
     pacmen[colorIndex].element?.classList.add("selected");
   } else if (type === "ghost" && ghosts[colorIndex]) {
     currentGhost = colorIndex;
-    currentPacman = 0;
+    currentPacman = null;
     playerType = "ghost";
     ghosts[colorIndex].element?.classList.add("selected");
   }
@@ -186,7 +186,7 @@ function initWebSocket() {
 
     ws.onopen = () => {
       multiplayerMode = true;
-      // Request initial game state (auto-join will be handled when it arrives)
+      // Request initial game state
       if (ws.readyState === WebSocket.OPEN) {
         ws.send(JSON.stringify({ type: "gameState" }));
       }
@@ -263,7 +263,6 @@ function handleServerMessage(data) {
       // Otherwise, accept the server as source of truth and update our local identity
       myCharacterType = newType;
       myColorIndex = newColorIndex;
-      window.autoJoinAttempted = false; // reset flag on successful join
 
       // Auto-select the character we joined as so the GUI and local selection match the server
       const colorName = COLORS[myColorIndex].charAt(0).toUpperCase() + COLORS[myColorIndex].slice(1);
@@ -275,8 +274,6 @@ function handleServerMessage(data) {
       break;
     }
     case "joinFailed":
-      // allow auto-join to try again on next gameState
-      window.autoJoinAttempted = false;
       break;
     case "gameState":
       // Update connected players map
@@ -306,29 +303,7 @@ function handleServerMessage(data) {
       if (data.gameStarted !== undefined) {
         gameStarted = data.gameStarted;
       }
-      // Auto-join if not already joined (only once per state update)
-      if (!myCharacterType && data.availableColors && !window.autoJoinAttempted) {
-        window.autoJoinAttempted = true; // prevent spamming join requests
-        const availablePacmen = data.availableColors.pacman || [];
-        const availableGhosts = data.availableColors.ghost || [];
-
-        // Prefer pacman, fall back to ghost
-        if (availablePacmen.length > 0) {
-          setTimeout(() => {
-            if (!myCharacterType) {
-              joinAsCharacter("pacman", availablePacmen[0]);
-            }
-          }, 200);
-        } else if (availableGhosts.length > 0) {
-          setTimeout(() => {
-            if (!myCharacterType) {
-              joinAsCharacter("ghost", availableGhosts[0]);
-            }
-          }, 200);
-        } else {
-          window.autoJoinAttempted = false; // allow retry when availability changes
-        }
-      }
+      // No auto-join - player must manually select a character
       break;
     case "gameStarted":
       gameStarted = true;
@@ -357,6 +332,15 @@ function handleServerMessage(data) {
       alert(
         `You've completed 10 rounds!\n\nChaser Score: ${data.chaserScore}\nChasee Score: ${data.chaseeScore}\nTotal Rounds: ${data.totalRounds}`
       );
+      // Clear our character selection (we've been kicked out)
+      myCharacterType = null;
+      myColorIndex = null;
+      // Clear visual selection
+      [...pacmen, ...ghosts].forEach((char) => {
+        if (char?.element) char.element.classList.remove("selected");
+      });
+      currentPacman = null;
+      currentGhost = null;
       // Update score display
       updateScoreDisplay();
       break;
@@ -500,8 +484,6 @@ function joinAsCharacter(characterType, colorIndex) {
         colorIndex: colorIndex,
       })
     );
-  } else {
-    window.autoJoinAttempted = false;
   }
 }
 
@@ -547,8 +529,8 @@ function init() {
     };
 
     // Main controls at root (no folders)
-    gui.add(guiParams, "start").name("Start");
-    gui.add(guiParams, "restart").name("Restart");
+    gui.add(guiParams, "start").name("Start game cycle");
+    gui.add(guiParams, "restart").name("Reset game cycle");
 
     gui
       .add(guiParams, "serverTarget", ["Render", "Local"])
@@ -703,8 +685,7 @@ function init() {
     updateCharacterAppearance(pacman);
   });
 
-  // Set initial player (after pacmen are created)
-  selectCharacter("pacman", "Red");
+  // No initial character selection - player must manually select
 
   // Create 4 ghosts at spawn positions (marked with 3 in the map)
   // Use the pre-calculated ghost spawn positions

@@ -387,6 +387,8 @@ function checkCollisions() {
                 totalRounds: player.stats.rounds,
               })
             );
+            // Kick player out - character goes back to AI
+            kickPlayerFromCharacter(playerId);
           } else {
             // Start new round
             player.stats.currentRoundStartTime = Date.now();
@@ -415,6 +417,8 @@ function checkCollisions() {
                   totalRounds: player.stats.rounds,
                 })
               );
+              // Kick player out - character goes back to AI
+              kickPlayerFromCharacter(playerId);
             } else {
               // Start new round
               player.stats.currentRoundStartTime = Date.now();
@@ -434,6 +438,8 @@ function checkCollisions() {
                   totalRounds: player.stats.rounds,
                 })
               );
+              // Kick player out - character goes back to AI
+              kickPlayerFromCharacter(playerId);
             }
           }
         }
@@ -605,6 +611,8 @@ function gameLoop() {
                   totalRounds: player.stats.rounds,
                 })
               );
+              // Kick player out - character goes back to AI
+              kickPlayerFromCharacter(playerId);
             } else {
               player.stats.currentRoundStartTime = Date.now();
             }
@@ -943,6 +951,23 @@ function handleInput(playerId, data) {
     return;
   }
   player.pendingInput = data.input;
+}
+
+function kickPlayerFromCharacter(playerId) {
+  // Kick a player out of their character (used when they complete 10 rounds)
+  const player = gameState.players.get(playerId);
+  if (player) {
+    // Free up the color
+    const colorList = gameState.availableColors[player.type];
+    if (colorList && !colorList.includes(player.colorIndex)) {
+      colorList.push(player.colorIndex);
+      colorList.sort();
+    }
+    // Remove player from controlling the character
+    gameState.players.delete(playerId);
+    broadcast({ type: "playerLeft", playerId: playerId });
+    broadcastGameState();
+  }
 }
 
 function handleDisconnect(playerId) {
