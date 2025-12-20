@@ -285,10 +285,21 @@ function createFugitive3D(color, x, y, px, py) {
   pointLight.decay = 1; // No decay (constant intensity)
   group.add(pointLight);
 
-  // Set group position - use pixel coordinates from server if available (they include CHARACTER_OFFSET)
-  // Otherwise calculate from grid coordinates using the same offset as server
-  const posX = px !== undefined ? px : x * CELL_SIZE + CHARACTER_OFFSET;
-  const posZ = py !== undefined ? py : y * CELL_SIZE + CHARACTER_OFFSET;
+  // Set group position - in 3D, center characters on the floor tiles
+  // Convert server's px/py (which use CHARACTER_OFFSET) to centered position
+  // Or calculate from grid coordinates centered on the cell
+  let posX, posZ;
+  if (px !== undefined && py !== undefined) {
+    // Server sends px/py with CHARACTER_OFFSET, convert to center of cell
+    // px = x * CELL_SIZE + CHARACTER_OFFSET, we want x * CELL_SIZE + CELL_SIZE / 2
+    // So: posX = px - CHARACTER_OFFSET + CELL_SIZE / 2
+    posX = px - CHARACTER_OFFSET + CELL_SIZE / 2;
+    posZ = py - CHARACTER_OFFSET + CELL_SIZE / 2;
+  } else {
+    // Calculate from grid coordinates, centered on cell
+    posX = x * CELL_SIZE + CELL_SIZE / 2;
+    posZ = y * CELL_SIZE + CELL_SIZE / 2;
+  }
   group.position.set(posX, CHARACTER_SIZE / 2, posZ);
   scene.add(group);
 
@@ -331,10 +342,21 @@ function createChaser3D(color, x, y, px, py) {
   pointLight.decay = 1; // No decay (constant intensity)
   group.add(pointLight);
 
-  // Set group position - use pixel coordinates from server if available (they include CHARACTER_OFFSET)
-  // Otherwise calculate from grid coordinates using the same offset as server
-  const posX = px !== undefined ? px : x * CELL_SIZE + CHARACTER_OFFSET;
-  const posZ = py !== undefined ? py : y * CELL_SIZE + CHARACTER_OFFSET;
+  // Set group position - in 3D, center characters on the floor tiles
+  // Convert server's px/py (which use CHARACTER_OFFSET) to centered position
+  // Or calculate from grid coordinates centered on the cell
+  let posX, posZ;
+  if (px !== undefined && py !== undefined) {
+    // Server sends px/py with CHARACTER_OFFSET, convert to center of cell
+    // px = x * CELL_SIZE + CHARACTER_OFFSET, we want x * CELL_SIZE + CELL_SIZE / 2
+    // So: posX = px - CHARACTER_OFFSET + CELL_SIZE / 2
+    posX = px - CHARACTER_OFFSET + CELL_SIZE / 2;
+    posZ = py - CHARACTER_OFFSET + CELL_SIZE / 2;
+  } else {
+    // Calculate from grid coordinates, centered on cell
+    posX = x * CELL_SIZE + CELL_SIZE / 2;
+    posZ = y * CELL_SIZE + CELL_SIZE / 2;
+  }
   group.position.set(posX, CHARACTER_SIZE / 2, posZ);
   scene.add(group);
 
@@ -375,9 +397,15 @@ function updatePositions3D(positions) {
       // Use pixel coordinates if available for accurate positioning
       fugitives3D[index] = createFugitive3D(pos.color, pos.x, pos.y, pos.px, pos.py);
     } else {
-      // Update group position (light moves automatically as child)
-      fugitives3D[index].mesh.position.x = pos.px;
-      fugitives3D[index].mesh.position.z = pos.py;
+      // Update group position - convert server's px/py (with CHARACTER_OFFSET) to centered position
+      if (pos.px !== undefined && pos.py !== undefined) {
+        fugitives3D[index].mesh.position.x = pos.px - CHARACTER_OFFSET + CELL_SIZE / 2;
+        fugitives3D[index].mesh.position.z = pos.py - CHARACTER_OFFSET + CELL_SIZE / 2;
+      } else {
+        // Fallback to grid coordinates, centered
+        fugitives3D[index].mesh.position.x = pos.x * CELL_SIZE + CELL_SIZE / 2;
+        fugitives3D[index].mesh.position.z = pos.y * CELL_SIZE + CELL_SIZE / 2;
+      }
     }
   });
 
@@ -388,9 +416,15 @@ function updatePositions3D(positions) {
       // Use pixel coordinates if available for accurate positioning
       chasers3D[index] = createChaser3D(pos.color, pos.x, pos.y, pos.px, pos.py);
     } else {
-      // Update group position (light moves automatically as child)
-      chasers3D[index].mesh.position.x = pos.px;
-      chasers3D[index].mesh.position.z = pos.py;
+      // Update group position - convert server's px/py (with CHARACTER_OFFSET) to centered position
+      if (pos.px !== undefined && pos.py !== undefined) {
+        chasers3D[index].mesh.position.x = pos.px - CHARACTER_OFFSET + CELL_SIZE / 2;
+        chasers3D[index].mesh.position.z = pos.py - CHARACTER_OFFSET + CELL_SIZE / 2;
+      } else {
+        // Fallback to grid coordinates, centered
+        chasers3D[index].mesh.position.x = pos.x * CELL_SIZE + CELL_SIZE / 2;
+        chasers3D[index].mesh.position.z = pos.y * CELL_SIZE + CELL_SIZE / 2;
+      }
     }
   });
 }
