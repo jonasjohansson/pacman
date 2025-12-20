@@ -453,6 +453,13 @@ function checkCollisions() {
             // After first round: 1.0 + 1 * 0.1 = 1.1 (10% faster)
             // This multiplies the base chaserSpeed (0.4), so final speed = 0.4 * 1.1 = 0.44
             chaser.speedMultiplier = 1.0 + chaser.roundsCompleted * gameState.chaserSpeedIncreasePerRound;
+            console.log(
+              `[SPEED] Chaser ${chaserIndex} (${chaser.color}) - CATCH: roundsCompleted=${chaser.roundsCompleted}, increasePerRound=${
+                gameState.chaserSpeedIncreasePerRound
+              }, multiplier=${chaser.speedMultiplier.toFixed(2)}, baseSpeed=${gameState.chaserSpeed}, finalSpeed=${(
+                gameState.chaserSpeed * chaser.speedMultiplier
+              ).toFixed(3)}`
+            );
           }
 
           // Send round end flash event to both players
@@ -525,7 +532,19 @@ function checkCollisions() {
         }
 
         respawnCharacter(fugitive, fugitive.spawnPos);
+        // Log before respawn to verify multiplier is set
+        if (chaser) {
+          console.log(
+            `[SPEED] BEFORE RESPAWN: chaser.roundsCompleted=${chaser.roundsCompleted}, chaser.speedMultiplier=${chaser.speedMultiplier}`
+          );
+        }
         respawnChaser(chaser, chaser.spawnPos);
+        // Log after respawn to verify multiplier is preserved
+        if (chaser) {
+          console.log(
+            `[SPEED] AFTER RESPAWN: chaser.roundsCompleted=${chaser.roundsCompleted}, chaser.speedMultiplier=${chaser.speedMultiplier}`
+          );
+        }
       }
     });
   });
@@ -673,7 +692,21 @@ function gameLoop() {
         // Check if survival time threshold has passed (round ends at threshold OR capture)
         if (player.stats.currentRoundStartTime) {
           const roundTime = (Date.now() - player.stats.currentRoundStartTime) / 1000;
+          // Log every second to see if time is progressing
+          if (Math.floor(roundTime) !== (pacman.lastLoggedSecond || -1)) {
+            pacman.lastLoggedSecond = Math.floor(roundTime);
+            if (roundTime < gameState.survivalTimeThreshold) {
+              console.log(
+                `[ROUND] Fugitive ${index} (${pacman.color}) round time: ${roundTime.toFixed(1)}s / ${gameState.survivalTimeThreshold}s`
+              );
+            }
+          }
           if (roundTime >= gameState.survivalTimeThreshold) {
+            console.log(
+              `[ROUND] Fugitive ${index} (${pacman.color}) survived ${roundTime.toFixed(1)}s (threshold: ${
+                gameState.survivalTimeThreshold
+              }s) - ROUND ENDING`
+            );
             // Round ended by time - fugitive survived
             // Award point for surviving the round + items collected this round
             player.stats.itemsCollected += pacman.itemsCollected || 0;
@@ -681,10 +714,32 @@ function gameLoop() {
             player.stats.fugitiveScore = player.stats.rounds + 1 + player.stats.itemsCollected;
             player.stats.rounds++;
 
-            // Find matching chaser for flash effect
+            // Find matching chaser for flash effect and speed increase
             const matchingChaser = gameState.chasers.find((c) => c && c.color === pacman.color);
             const chaserIndex = matchingChaser ? gameState.chasers.indexOf(matchingChaser) : -1;
             const fugitiveIndex = index;
+
+            // Increase chaser speed when fugitive survives (round ends by time)
+            if (chaserIndex >= 0 && matchingChaser) {
+              const oldRounds = matchingChaser.roundsCompleted || 0;
+              matchingChaser.roundsCompleted = oldRounds + 1;
+              matchingChaser.speedMultiplier = 1.0 + matchingChaser.roundsCompleted * gameState.chaserSpeedIncreasePerRound;
+              console.log(
+                `[SPEED] Chaser ${chaserIndex} (${matchingChaser.color}) - FUGITIVE SURVIVED: oldRounds=${oldRounds}, newRounds=${
+                  matchingChaser.roundsCompleted
+                }, increasePerRound=${gameState.chaserSpeedIncreasePerRound}, multiplier=${matchingChaser.speedMultiplier.toFixed(
+                  2
+                )}, baseSpeed=${gameState.chaserSpeed}, finalSpeed=${(gameState.chaserSpeed * matchingChaser.speedMultiplier).toFixed(3)}`
+              );
+              // Verify the multiplier is set BEFORE respawn
+              console.log(
+                `[SPEED] BEFORE RESPAWN: chaser.roundsCompleted=${matchingChaser.roundsCompleted}, chaser.speedMultiplier=${matchingChaser.speedMultiplier}`
+              );
+            } else {
+              console.log(
+                `[SPEED] WARNING: Could not find matching chaser for fugitive ${index} (${pacman.color}), chaserIndex=${chaserIndex}`
+              );
+            }
 
             // Send round end flash event
             player.ws.send(
@@ -766,6 +821,13 @@ function gameLoop() {
               // Speed multiplier: 1.0 + (roundsCompleted * chaserSpeedIncreasePerRound)
               // After first round: 1.0 + 1 * 0.1 = 1.1 (10% faster)
               chaser.speedMultiplier = 1.0 + chaser.roundsCompleted * gameState.chaserSpeedIncreasePerRound;
+              console.log(
+                `[SPEED] Chaser ${index} (${chaser.color}) - TIME END: roundsCompleted=${chaser.roundsCompleted}, increasePerRound=${
+                  gameState.chaserSpeedIncreasePerRound
+                }, multiplier=${chaser.speedMultiplier.toFixed(2)}, baseSpeed=${gameState.chaserSpeed}, finalSpeed=${(
+                  gameState.chaserSpeed * chaser.speedMultiplier
+                ).toFixed(3)}`
+              );
             }
 
             // Find matching fugitive for flash effect
@@ -883,6 +945,15 @@ function gameLoop() {
     // All chasers move with global chaser speed, multiplied by rounds completed
     const speedMultiplier = chaser.speedMultiplier || 1.0;
     const finalSpeed = gameState.chaserSpeed * speedMultiplier;
+    // Debug log (only log occasionally to avoid spam)
+    if (Math.random() < 0.001) {
+      // Log ~0.1% of the time
+      console.log(
+        `[SPEED] Chaser ${index} (${chaser.color}) moving: roundsCompleted=${chaser.roundsCompleted || 0}, increasePerRound=${
+          gameState.chaserSpeedIncreasePerRound
+        }, multiplier=${speedMultiplier.toFixed(2)}, baseSpeed=${gameState.chaserSpeed}, finalSpeed=${finalSpeed.toFixed(3)}`
+      );
+    }
     moveCharacter(chaser, finalSpeed);
 
     if (!isAtTarget(chaser)) {
@@ -1176,7 +1247,7 @@ function handleJoin(ws, playerId, data) {
 }
 
 function handleSetSpeeds(data) {
-  const { pacmanSpeed, ghostSpeed, fugitiveSpeed, chaserSpeed, survivalTimeThreshold } = data;
+  const { pacmanSpeed, ghostSpeed, fugitiveSpeed, chaserSpeed, survivalTimeThreshold, chaserSpeedIncreasePerRound } = data;
   // Support both new and legacy names
   if (typeof fugitiveSpeed === "number") {
     gameState.fugitiveSpeed = Math.max(0.2, Math.min(3, fugitiveSpeed));
@@ -1193,6 +1264,7 @@ function handleSetSpeeds(data) {
   }
   if (typeof chaserSpeedIncreasePerRound === "number") {
     gameState.chaserSpeedIncreasePerRound = Math.max(0, Math.min(0.5, chaserSpeedIncreasePerRound));
+    console.log(`[SPEED] Updated chaserSpeedIncreasePerRound to ${gameState.chaserSpeedIncreasePerRound}`);
   }
 }
 

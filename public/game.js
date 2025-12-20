@@ -1182,6 +1182,9 @@ function init() {
         pacmen[colorIndex].element.style.backgroundRepeat = "no-repeat";
       }
     });
+
+    // Send initial speed config to server (including chaserSpeedIncreasePerRound)
+    sendSpeedConfig(guiParams.fugitiveSpeed, guiParams.chaserSpeed, guiParams.survivalTimeThreshold, guiParams.chaserSpeedIncreasePerRound);
   }
   const maze = document.getElementById("maze");
   maze.style.width = COLS * CELL_SIZE + "px";
