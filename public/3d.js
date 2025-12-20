@@ -22,7 +22,7 @@ let mazeVoxels = [];
 let fugitiveLights = []; // Point lights for fugitives
 let chaserLights = []; // Point lights for chasers
 let ambientLight3D, directionalLight3D; // Global lights for intensity control
-let wallMaterial3D, floorMaterial3D, teleportMaterial3D; // Materials for color control
+let innerWallMaterial3D, outerWallMaterial3D, floorMaterial3D, teleportMaterial3D; // Materials for color control
 
 // Initialize 3D rendering
 function init3D() {
@@ -116,7 +116,9 @@ function createMazeVoxels() {
       const worldZ = y * CELL_SIZE;
       
       if (cellType === 1) { // Wall - build with voxels
-        createWallVoxels(worldX, worldZ);
+        // Determine if this is an outer wall (on the edge of the map)
+        const isEdge = x === 0 || x === COLS - 1 || y === 0 || y === ROWS - 1;
+        createWallVoxels(worldX, worldZ, isEdge);
       } else if (cellType === 0 || cellType === 2) { // Path or teleport - create floor voxels
         createFloorVoxels(worldX, worldZ, cellType === 2);
       }
@@ -124,14 +126,25 @@ function createMazeVoxels() {
   }
 }
 
-function createWallVoxels(worldX, worldZ) {
+function createWallVoxels(worldX, worldZ, isOuterWall = false) {
   // Optimize: Create a single merged geometry for each wall cell instead of individual voxels
   const voxelsPerCell = CELL_SIZE / VOXEL_SIZE;
   const voxelHeight = VOXEL_HEIGHT / VOXEL_SIZE;
   
-  // Use shared material for all walls (created once, reused)
-  if (!wallMaterial3D) {
-    wallMaterial3D = new THREE.MeshStandardMaterial({ 
+  // Use shared materials for walls (created once, reused)
+  // Inner wall material
+  if (!innerWallMaterial3D) {
+    innerWallMaterial3D = new THREE.MeshStandardMaterial({ 
+      color: 0xffffff, // White default
+      roughness: 0.5,
+      metalness: 0.2,
+      emissive: 0x000000 // No emissive - should reflect point lights
+    });
+  }
+  
+  // Outer wall material
+  if (!outerWallMaterial3D) {
+    outerWallMaterial3D = new THREE.MeshStandardMaterial({ 
       color: 0xffffff, // White default
       roughness: 0.5,
       metalness: 0.2,
@@ -142,7 +155,8 @@ function createWallVoxels(worldX, worldZ) {
   // Use instanced geometry or merged geometry for better performance
   // For now, create a single box per cell (much faster)
   const wallGeometry = new THREE.BoxGeometry(CELL_SIZE, VOXEL_HEIGHT, CELL_SIZE);
-  const wall = new THREE.Mesh(wallGeometry, wallMaterial3D);
+  const wallMaterial = isOuterWall ? outerWallMaterial3D : innerWallMaterial3D;
+  const wall = new THREE.Mesh(wallGeometry, wallMaterial);
   wall.position.set(worldX, VOXEL_HEIGHT / 2, worldZ);
   wall.castShadow = true; // Walls cast shadows to block light
   wall.receiveShadow = true; // Walls can receive shadows
@@ -437,9 +451,15 @@ function setPointLightIntensity(intensity) {
   });
 }
 
-function setWallColor(colorHex) {
-  if (wallMaterial3D) {
-    wallMaterial3D.color.set(colorHex);
+function setInnerWallColor(colorHex) {
+  if (innerWallMaterial3D) {
+    innerWallMaterial3D.color.set(colorHex);
+  }
+}
+
+function setOuterWallColor(colorHex) {
+  if (outerWallMaterial3D) {
+    outerWallMaterial3D.color.set(colorHex);
   }
 }
 
@@ -472,7 +492,8 @@ window.render3D = {
   setAmbientLight: setAmbientLightIntensity,
   setDirectionalLight: setDirectionalLightIntensity,
   setPointLightIntensity: setPointLightIntensity,
-  setWallColor: setWallColor,
+  setInnerWallColor: setInnerWallColor,
+  setOuterWallColor: setOuterWallColor,
   setPathColor: setPathColor,
   useOrthographic: () => useOrthographic,
   initialized: false

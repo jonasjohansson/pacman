@@ -310,10 +310,6 @@ function handleServerMessage(data) {
         }
       }
 
-      // Update 3D items if enabled
-      if (view3D && window.render3D && data.items) {
-        window.render3D.updateItems(data.items);
-      }
       // Update game started state
       if (data.gameStarted !== undefined) {
         gameStarted = data.gameStarted;
@@ -542,11 +538,14 @@ function joinQueue() {
 function toggle3DView(enabled) {
   const gameContainer = document.getElementById("game-container");
   const canvas = document.getElementById("webgl-canvas");
+  const buildingImage = document.getElementById("building-image");
 
   if (enabled) {
     // Hide 2D view, show 3D canvas
     if (gameContainer) gameContainer.style.display = "none";
     if (canvas) canvas.style.display = "block";
+    // Keep building image visible in 3D mode
+    if (buildingImage) buildingImage.style.display = "block";
 
     // Initialize 3D if not already initialized
     if (window.render3D && !window.render3D.initialized) {
@@ -559,20 +558,30 @@ function toggle3DView(enabled) {
       window.lightControllers.ambient.show();
       window.lightControllers.directional.show();
       window.lightControllers.point.show();
-      window.lightControllers.wallColor.show();
       window.lightControllers.pathColor.show();
+    }
+    
+    // Initialize 3D wall colors from current GUI params
+    if (window.render3D) {
+      if (window.render3D.setInnerWallColor) {
+        window.render3D.setInnerWallColor(guiParams.innerWallColor);
+      }
+      if (window.render3D.setOuterWallColor) {
+        window.render3D.setOuterWallColor(guiParams.outerWallColor);
+      }
     }
   } else {
     // Show 2D view, hide 3D canvas
     if (gameContainer) gameContainer.style.display = "block";
     if (canvas) canvas.style.display = "none";
+    // Keep building image visible in 2D mode
+    if (buildingImage) buildingImage.style.display = "block";
 
     // Hide lighting and color controls
     if (window.lightControllers) {
       window.lightControllers.ambient.hide();
       window.lightControllers.directional.hide();
       window.lightControllers.point.hide();
-      window.lightControllers.wallColor.hide();
       window.lightControllers.pathColor.hide();
     }
 
@@ -625,11 +634,9 @@ function init() {
       ambientLightIntensity: 0.1, // Global ambient light intensity
       directionalLightIntensity: 0.3, // Global directional light intensity
       pointLightIntensity: 40, // Point light intensity for characters (0-100 range)
-      wallColor: "#ffffff", // Wall color in hex (white)
       pathColor: "#777777", // Path/floor color in hex (gray)
       innerWallColor: "#ffffff", // Inner wall color in hex (white)
       outerWallColor: "#ffffff", // Outer wall color in hex (white)
-      itemsEnabled: false, // Toggle for yellow dots/items
       buildingOpacity: 1.0, // Building image opacity (0-1)
       mazeOpacity: 1.0, // Maze opacity (0-1)
       startGameCycle: () => startGame(),
@@ -712,18 +719,38 @@ function init() {
       });
     pointLightCtrl.hide(); // Hidden by default
 
-    // 3D color controls (only visible when 3D view is enabled)
-    const wallColorCtrl = gui
-      .addColor(guiParams, "wallColor")
-      .name("Wall Color")
+    // Create Style folder for grouped controls
+    const styleFolder = gui.addFolder("Style");
+    styleFolder.open(); // Open by default
+
+    // Inner wall color control (affects both 2D borders and 3D materials)
+    styleFolder
+      .addColor(guiParams, "innerWallColor")
+      .name("Inner Wall Color")
       .onChange((value) => {
-        if (view3D && window.render3D && window.render3D.setWallColor) {
-          window.render3D.setWallColor(value);
+        // Update 2D border color
+        document.documentElement.style.setProperty("--color-inner-wall-border", value);
+        // Update 3D material color
+        if (view3D && window.render3D && window.render3D.setInnerWallColor) {
+          window.render3D.setInnerWallColor(value);
         }
       });
-    wallColorCtrl.hide(); // Hidden by default
 
-    const pathColorCtrl = gui
+    // Outer wall color control (affects both 2D borders and 3D materials)
+    styleFolder
+      .addColor(guiParams, "outerWallColor")
+      .name("Outer Wall Color")
+      .onChange((value) => {
+        // Update 2D border color
+        document.documentElement.style.setProperty("--color-outer-wall-border", value);
+        // Update 3D material color
+        if (view3D && window.render3D && window.render3D.setOuterWallColor) {
+          window.render3D.setOuterWallColor(value);
+        }
+      });
+
+    // Path color control (only visible when 3D view is enabled)
+    const pathColorCtrl = styleFolder
       .addColor(guiParams, "pathColor")
       .name("Path Color")
       .onChange((value) => {
@@ -733,23 +760,8 @@ function init() {
       });
     pathColorCtrl.hide(); // Hidden by default
 
-    // Items toggle (server control)
-    const itemsEnabledCtrl = gui
-      .add(guiParams, "itemsEnabled")
-      .name("Yellow Dots (Items)")
-      .onChange((value) => {
-        if (ws && ws.readyState === WebSocket.OPEN) {
-          ws.send(
-            JSON.stringify({
-              type: "setItemsEnabled",
-              enabled: value,
-            })
-          );
-        }
-      });
-
     // Building image opacity slider
-    gui
+    styleFolder
       .add(guiParams, "buildingOpacity", 0, 1, 0.01)
       .name("Building Opacity")
       .onChange((value) => {
@@ -760,7 +772,7 @@ function init() {
       });
 
     // Maze opacity slider
-    gui
+    styleFolder
       .add(guiParams, "mazeOpacity", 0, 1, 0.01)
       .name("Maze Opacity")
       .onChange((value) => {
@@ -768,32 +780,6 @@ function init() {
         if (maze) {
           maze.style.opacity = value;
         }
-      });
-
-    // Inner wall color control
-    gui
-      .addColor(guiParams, "innerWallColor")
-      .name("Inner Wall Color")
-      .onChange((value) => {
-        document.documentElement.style.setProperty("--color-inner-wall-border", value);
-        // Update existing walls
-        const innerWalls = document.querySelectorAll(".wall:not(.outer-wall)");
-        innerWalls.forEach((wall) => {
-          wall.style.borderColor = value;
-        });
-      });
-
-    // Outer wall color control
-    gui
-      .addColor(guiParams, "outerWallColor")
-      .name("Outer Wall Color")
-      .onChange((value) => {
-        document.documentElement.style.setProperty("--color-outer-wall-border", value);
-        // Update existing walls
-        const outerWalls = document.querySelectorAll(".wall.outer-wall");
-        outerWalls.forEach((wall) => {
-          wall.style.borderColor = value;
-        });
       });
 
     // Set initial opacity values
@@ -806,16 +792,18 @@ function init() {
       maze.style.opacity = guiParams.mazeOpacity;
     }
 
-    // Set initial wall color values
+    // Set initial wall color values for 2D
     document.documentElement.style.setProperty("--color-inner-wall-border", guiParams.innerWallColor);
     document.documentElement.style.setProperty("--color-outer-wall-border", guiParams.outerWallColor);
+    
+    // Initialize 3D wall colors (will be applied when 3D mode is enabled)
+    // This ensures colors are set correctly when switching to 3D mode
 
     // Store controllers for showing/hiding
     window.lightControllers = {
       ambient: ambientLightCtrl,
       directional: directionalLightCtrl,
       point: pointLightCtrl,
-      wallColor: wallColorCtrl,
       pathColor: pathColorCtrl,
     };
 
@@ -854,7 +842,11 @@ function init() {
         sendSpeedConfig(guiParams.fugitiveSpeed, value);
       });
 
-    // Character selection: one entry per pacman/ghost/color at root
+    // Create Characters & Scoring folder
+    const charactersFolder = gui.addFolder("Characters & Scoring");
+    charactersFolder.open(); // Open by default
+
+    // Character selection: one entry per pacman/ghost/color
     const joinActions = {};
     window.characterControllers = { pacman: [], ghost: [] };
 
@@ -879,17 +871,17 @@ function init() {
         joinAsCharacter("chaser", i, guiParams.playerInitials);
       };
 
-      const fugitiveCtrl = gui.add(joinActions, fugitiveKey);
-      const chaserCtrl = gui.add(joinActions, chaserKey);
+      const fugitiveCtrl = charactersFolder.add(joinActions, fugitiveKey);
+      const chaserCtrl = charactersFolder.add(joinActions, chaserKey);
       window.characterControllers.pacman[i] = fugitiveCtrl;
       window.characterControllers.ghost[i] = chaserCtrl;
     });
 
     // Score display
     window.scoreDisplay = {
-      chaserScore: gui.add({ value: 0 }, "value").name("Chaser Score").disable(),
-      fugitiveScore: gui.add({ value: 0 }, "value").name("Fugitive Score").disable(),
-      rounds: gui.add({ value: 0 }, "value").name("Rounds").disable(),
+      chaserScore: charactersFolder.add({ value: 0 }, "value").name("Chaser Score").disable(),
+      fugitiveScore: charactersFolder.add({ value: 0 }, "value").name("Fugitive Score").disable(),
+      rounds: charactersFolder.add({ value: 0 }, "value").name("Rounds").disable(),
     };
   }
   const maze = document.getElementById("maze");
