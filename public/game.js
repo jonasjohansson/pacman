@@ -571,13 +571,16 @@ function toggle3DView(enabled) {
       window.lightControllers.pathColor.show();
     }
 
-    // Initialize 3D wall colors from current GUI params
+    // Initialize 3D wall colors and path color from current GUI params
     if (window.render3D) {
       if (window.render3D.setInnerWallColor) {
         window.render3D.setInnerWallColor(guiParams.innerWallColor);
       }
       if (window.render3D.setOuterWallColor) {
         window.render3D.setOuterWallColor(guiParams.outerWallColor);
+      }
+      if (window.render3D.setPathColor) {
+        window.render3D.setPathColor(guiParams.pathColor);
       }
     }
   } else {
@@ -644,10 +647,11 @@ function init() {
       camera3D: "Orthographic", // Camera type for 3D view
       ambientLightIntensity: 0.1, // Global ambient light intensity
       directionalLightIntensity: 0.3, // Global directional light intensity
-      pointLightIntensity: 40, // Point light intensity for characters (0-400 range)
-      pathColor: "#777777", // Path/floor color in hex (gray)
+      pointLightIntensity: 100, // Point light intensity for characters (0-400 range)
+      pathColor: "#dddddd", // Path/floor color in hex (light gray)
       innerWallColor: "#ffffff", // Inner wall color in hex (white)
       outerWallColor: "#ffffff", // Outer wall color in hex (white)
+      bodyBackgroundColor: "#555555", // Body background color in hex
       buildingOpacity: 0.0, // Building image opacity (0-1)
       buildingRealOpacity: 1.0, // Building real image opacity (0-1)
       buildingRealScale: 1.1, // Building real image scale (0.1-3.0)
@@ -777,6 +781,14 @@ function init() {
         }
       });
 
+    // Body background color control
+    styleFolder
+      .addColor(guiParams, "bodyBackgroundColor")
+      .name("Body Background Color")
+      .onChange((value) => {
+        document.body.style.backgroundColor = value;
+      });
+
     // Path color control (only visible when 3D view is enabled)
     const pathColorCtrl = styleFolder
       .addColor(guiParams, "pathColor")
@@ -885,6 +897,9 @@ function init() {
           buildingRealImage.style.mixBlendMode = value;
         }
       });
+
+    // Set initial body background color
+    document.body.style.backgroundColor = guiParams.bodyBackgroundColor;
 
     // Set initial opacity values
     const buildingImage = document.getElementById("building-image");
