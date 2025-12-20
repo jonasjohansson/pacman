@@ -41,6 +41,12 @@ for (let y = 0; y < ROWS; y++) {
     }
   }
 }
+// Sort spawn positions to match server order: red, green, blue, yellow
+// Order: top-left, top-right, bottom-left, bottom-right
+ghostSpawnPositions.sort((a, b) => {
+  if (a.y !== b.y) return a.y - b.y; // Sort by row first (top to bottom)
+  return a.x - b.x; // Then by column (left to right)
+});
 
 // Pre-calculate pacman spawn positions
 const pacmanSpawnPositions = [
@@ -54,13 +60,15 @@ const pacmanSpawnPositions = [
 function isPath(x, y) {
   if (x < 0 || x >= COLS || y < 0 || y >= ROWS) return false;
   const cell = MAP[y][x];
-  return cell === 0 || cell === 2 || cell === 3;
+  // Treat 0 (path), 2 (teleport), 3 (chaser spawn), and 4 (fugitive spawn) as walkable paths
+  return cell === 0 || cell === 2 || cell === 3 || cell === 4;
 }
 
 function shouldCreateBorder(x, y) {
   if (x < 0 || x >= COLS || y < 0 || y >= ROWS) return false;
   const cell = MAP[y][x];
-  return cell === 0 || cell === 2;
+  // Treat 0 (path), 2 (teleport), 3 (chaser spawn), and 4 (fugitive spawn) as paths for border rendering
+  return cell === 0 || cell === 2 || cell === 3 || cell === 4;
 }
 
 function respawnCharacter(character, spawnPos) {
@@ -637,7 +645,7 @@ function init() {
       pathColor: "#777777", // Path/floor color in hex (gray)
       innerWallColor: "#ffffff", // Inner wall color in hex (white)
       outerWallColor: "#ffffff", // Outer wall color in hex (white)
-      buildingOpacity: 1.0, // Building image opacity (0-1)
+      buildingOpacity: 0.0, // Building image opacity (0-1)
       mazeOpacity: 1.0, // Maze opacity (0-1)
       startGameCycle: () => startGame(),
       resetGameCycle: () => restartGame(),
@@ -863,22 +871,30 @@ function init() {
       "Hasse & Glenn", // Yellow (index 3)
     ];
 
+    // Add all fugitives first
     COLORS.forEach((color, i) => {
       const colorName = color.charAt(0).toUpperCase() + color.slice(1);
       const fugitiveName = fugitiveNames[i] || `${colorName} Fugitive`;
       const fugitiveKey = `${colorName} Fugitive (${fugitiveName})`;
-      const chaserKey = `${colorName} Chaser`;
 
       joinActions[fugitiveKey] = () => {
         joinAsCharacter("fugitive", i, guiParams.playerInitials);
       };
+
+      const fugitiveCtrl = charactersFolder.add(joinActions, fugitiveKey);
+      window.characterControllers.pacman[i] = fugitiveCtrl;
+    });
+
+    // Then add all chasers
+    COLORS.forEach((color, i) => {
+      const colorName = color.charAt(0).toUpperCase() + color.slice(1);
+      const chaserKey = `${colorName} Chaser`;
+
       joinActions[chaserKey] = () => {
         joinAsCharacter("chaser", i, guiParams.playerInitials);
       };
 
-      const fugitiveCtrl = charactersFolder.add(joinActions, fugitiveKey);
       const chaserCtrl = charactersFolder.add(joinActions, chaserKey);
-      window.characterControllers.pacman[i] = fugitiveCtrl;
       window.characterControllers.ghost[i] = chaserCtrl;
     });
 

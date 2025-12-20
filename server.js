@@ -43,15 +43,26 @@ for (let y = 0; y < ROWS; y++) {
 
 // Sort spawn positions to ensure consistent order: red, green, blue, yellow
 // Order: top-left, top-right, bottom-left, bottom-right
+// For chasers: they spawn in the middle rows, so we sort by row then column
+chaserSpawnPositions.sort((a, b) => {
+  if (a.y !== b.y) return a.y - b.y; // Sort by row first (top to bottom)
+  return a.x - b.x; // Then by column (left to right)
+});
+
+// For fugitives: they spawn in corners, so we sort by row then column
 fugitiveSpawnPositions.sort((a, b) => {
   if (a.y !== b.y) return a.y - b.y; // Sort by row first (top to bottom)
   return a.x - b.x; // Then by column (left to right)
 });
 
-chaserSpawnPositions.sort((a, b) => {
-  if (a.y !== b.y) return a.y - b.y; // Sort by row first (top to bottom)
-  return a.x - b.x; // Then by column (left to right)
-});
+// Ensure we only use the first 4 spawn positions for each type
+// This ensures consistent color assignment: index 0 = red, 1 = green, 2 = blue, 3 = yellow
+if (chaserSpawnPositions.length > 4) {
+  chaserSpawnPositions.length = 4;
+}
+if (fugitiveSpawnPositions.length > 4) {
+  fugitiveSpawnPositions.length = 4;
+}
 
 // ========== GAME STATE ==========
 const gameState = {
@@ -134,6 +145,8 @@ function initCharacters() {
     itemsCollected: 0, // Number of collectible items collected this round
   }));
 
+  // Initialize chasers in the exact order of chaserSpawnPositions
+  // This ensures: index 0 = red (first spawn), 1 = green (second spawn), 2 = blue (third spawn), 3 = yellow (fourth spawn)
   gameState.chasers = chaserSpawnPositions.slice(0, 4).map((pos, i) => {
     // Find initial direction
     let initialTargetX = pos.x;
@@ -158,7 +171,7 @@ function initCharacters() {
       py: pos.y * CELL_SIZE + CHARACTER_OFFSET,
       targetX: initialTargetX,
       targetY: initialTargetY,
-      color: COLORS[i],
+      color: COLORS[i], // Color assignment: 0=red, 1=green, 2=blue, 3=yellow
       // Keep chasers at base speed; overridden by global chaserSpeed multiplier
       roundsCompleted: 0, // Track rounds for speed increase
       speed: 1.0,

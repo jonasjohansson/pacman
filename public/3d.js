@@ -136,8 +136,9 @@ function createMazeVoxels() {
   for (let y = 0; y < ROWS; y++) {
     for (let x = 0; x < COLS; x++) {
       const cellType = MAP[y][x];
-      if (cellType === 0 || cellType === 2) {
-        // Path or teleport - create floor voxels
+      // Treat 0 (path), 2 (teleport), 3 (chaser spawn), and 4 (fugitive spawn) as paths
+      if (cellType === 0 || cellType === 2 || cellType === 3 || cellType === 4) {
+        // Path, teleport, or spawn - create floor voxels
         const worldX = x * CELL_SIZE;
         const worldZ = y * CELL_SIZE;
         createFloorVoxels(worldX, worldZ, cellType === 2);
@@ -241,14 +242,15 @@ function createFloorVoxels(worldX, worldZ, isTeleport = false) {
   const floorMaterial = isTeleport ? teleportMaterial3D : floorMaterial3D;
   const floor = new THREE.Mesh(floorGeometry, floorMaterial);
   floor.rotation.x = -Math.PI / 2;
-  floor.position.set(worldX, 0, worldZ);
+  // Position floor at the center of the cell (not the corner)
+  floor.position.set(worldX + CELL_SIZE / 2, 0, worldZ + CELL_SIZE / 2);
   floor.castShadow = false; // Floors don't cast shadows
   floor.receiveShadow = true; // Floors receive shadows from walls and characters
   scene.add(floor);
   mazeVoxels.push(floor);
 }
 
-function createFugitive3D(color, x, y) {
+function createFugitive3D(color, x, y, px, py) {
   // Create a group to hold both the mesh and light
   const group = new THREE.Group();
 
@@ -283,15 +285,18 @@ function createFugitive3D(color, x, y) {
   pointLight.decay = 1; // No decay (constant intensity)
   group.add(pointLight);
 
-  // Set group position
-  group.position.set(x * CELL_SIZE + CHARACTER_OFFSET, CHARACTER_SIZE / 2, y * CELL_SIZE + CHARACTER_OFFSET);
+  // Set group position - use pixel coordinates if available, otherwise calculate from grid coordinates
+  // Position at center of cell to match floor positioning
+  const posX = px !== undefined ? px : x * CELL_SIZE + CELL_SIZE / 2;
+  const posZ = py !== undefined ? py : y * CELL_SIZE + CELL_SIZE / 2;
+  group.position.set(posX, CHARACTER_SIZE / 2, posZ);
   scene.add(group);
 
   // Store the group (which contains both mesh and light)
   return { mesh: group, light: pointLight };
 }
 
-function createChaser3D(color, x, y) {
+function createChaser3D(color, x, y, px, py) {
   // Create a group to hold both the mesh and light
   const group = new THREE.Group();
 
@@ -326,8 +331,11 @@ function createChaser3D(color, x, y) {
   pointLight.decay = 1; // No decay (constant intensity)
   group.add(pointLight);
 
-  // Set group position
-  group.position.set(x * CELL_SIZE + CHARACTER_OFFSET, CHARACTER_SIZE / 2, y * CELL_SIZE + CHARACTER_OFFSET);
+  // Set group position - use pixel coordinates if available, otherwise calculate from grid coordinates
+  // Position at center of cell to match floor positioning
+  const posX = px !== undefined ? px : x * CELL_SIZE + CELL_SIZE / 2;
+  const posZ = py !== undefined ? py : y * CELL_SIZE + CELL_SIZE / 2;
+  group.position.set(posX, CHARACTER_SIZE / 2, posZ);
   scene.add(group);
 
   // Store the group (which contains both mesh and light)
@@ -364,7 +372,8 @@ function updatePositions3D(positions) {
   const fugitivePositions = positions.fugitives || positions.pacmen || [];
   fugitivePositions.forEach((pos, index) => {
     if (!fugitives3D[index]) {
-      fugitives3D[index] = createFugitive3D(pos.color, pos.x, pos.y);
+      // Use pixel coordinates if available for accurate positioning
+      fugitives3D[index] = createFugitive3D(pos.color, pos.x, pos.y, pos.px, pos.py);
     } else {
       // Update group position (light moves automatically as child)
       fugitives3D[index].mesh.position.x = pos.px;
@@ -376,7 +385,8 @@ function updatePositions3D(positions) {
   const chaserPositions = positions.chasers || positions.ghosts || [];
   chaserPositions.forEach((pos, index) => {
     if (!chasers3D[index]) {
-      chasers3D[index] = createChaser3D(pos.color, pos.x, pos.y);
+      // Use pixel coordinates if available for accurate positioning
+      chasers3D[index] = createChaser3D(pos.color, pos.x, pos.y, pos.px, pos.py);
     } else {
       // Update group position (light moves automatically as child)
       chasers3D[index].mesh.position.x = pos.px;
