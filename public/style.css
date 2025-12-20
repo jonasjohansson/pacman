@@ -232,5 +232,15 @@ a:visited {
   cursor: pointer;
 }
 
-
-
+#building-image {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  width: calc(42 * var(--cell-size)); /* COLS * CELL_SIZE */
+  height: calc(24 * var(--cell-size)); /* ROWS * CELL_SIZE */
+  object-fit: contain;
+  object-position: 15px;
+  padding-right: 30px;
+  z-index: 0;
+}

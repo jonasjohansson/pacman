@@ -628,6 +628,8 @@ function init() {
       wallColor: "#ffffff", // Wall color in hex (white)
       pathColor: "#777777", // Path/floor color in hex (gray)
       itemsEnabled: false, // Toggle for yellow dots/items
+      buildingOpacity: 1.0, // Building image opacity (0-1)
+      mazeOpacity: 1.0, // Maze opacity (0-1)
       startGameCycle: () => startGame(),
       resetGameCycle: () => restartGame(),
       joinQueue: () => joinQueue(),
@@ -743,6 +745,38 @@ function init() {
           );
         }
       });
+
+    // Building image opacity slider
+    gui
+      .add(guiParams, "buildingOpacity", 0, 1, 0.01)
+      .name("Building Opacity")
+      .onChange((value) => {
+        const buildingImage = document.getElementById("building-image");
+        if (buildingImage) {
+          buildingImage.style.opacity = value;
+        }
+      });
+
+    // Maze opacity slider
+    gui
+      .add(guiParams, "mazeOpacity", 0, 1, 0.01)
+      .name("Maze Opacity")
+      .onChange((value) => {
+        const maze = document.getElementById("maze");
+        if (maze) {
+          maze.style.opacity = value;
+        }
+      });
+
+    // Set initial opacity values
+    const buildingImage = document.getElementById("building-image");
+    if (buildingImage) {
+      buildingImage.style.opacity = guiParams.buildingOpacity;
+    }
+    const maze = document.getElementById("maze");
+    if (maze) {
+      maze.style.opacity = guiParams.mazeOpacity;
+    }
 
     // Store controllers for showing/hiding
     window.lightControllers = {
