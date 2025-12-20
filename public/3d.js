@@ -108,31 +108,7 @@ function createMazeVoxels() {
   mazeVoxels.forEach(voxel => scene.remove(voxel));
   mazeVoxels = [];
 
-  // Create voxel-based maze
-  for (let y = 0; y < ROWS; y++) {
-    for (let x = 0; x < COLS; x++) {
-      const cellType = MAP[y][x];
-      const worldX = x * CELL_SIZE;
-      const worldZ = y * CELL_SIZE;
-      
-      if (cellType === 1) { // Wall - build with voxels
-        // Determine if this is an outer wall (on the edge of the map)
-        const isEdge = x === 0 || x === COLS - 1 || y === 0 || y === ROWS - 1;
-        createWallVoxels(worldX, worldZ, isEdge);
-      } else if (cellType === 0 || cellType === 2) { // Path or teleport - create floor voxels
-        createFloorVoxels(worldX, worldZ, cellType === 2);
-      }
-    }
-  }
-}
-
-function createWallVoxels(worldX, worldZ, isOuterWall = false) {
-  // Optimize: Create a single merged geometry for each wall cell instead of individual voxels
-  const voxelsPerCell = CELL_SIZE / VOXEL_SIZE;
-  const voxelHeight = VOXEL_HEIGHT / VOXEL_SIZE;
-  
-  // Use shared materials for walls (created once, reused)
-  // Inner wall material
+  // Initialize materials if not already created
   if (!innerWallMaterial3D) {
     innerWallMaterial3D = new THREE.MeshStandardMaterial({ 
       color: 0xffffff, // White default
@@ -142,7 +118,6 @@ function createWallVoxels(worldX, worldZ, isOuterWall = false) {
     });
   }
   
-  // Outer wall material
   if (!outerWallMaterial3D) {
     outerWallMaterial3D = new THREE.MeshStandardMaterial({ 
       color: 0xffffff, // White default
@@ -151,18 +126,92 @@ function createWallVoxels(worldX, worldZ, isOuterWall = false) {
       emissive: 0x000000 // No emissive - should reflect point lights
     });
   }
-  
-  // Use instanced geometry or merged geometry for better performance
-  // For now, create a single box per cell (much faster)
-  const wallGeometry = new THREE.BoxGeometry(CELL_SIZE, VOXEL_HEIGHT, CELL_SIZE);
-  const wallMaterial = isOuterWall ? outerWallMaterial3D : innerWallMaterial3D;
-  const wall = new THREE.Mesh(wallGeometry, wallMaterial);
-  wall.position.set(worldX, VOXEL_HEIGHT / 2, worldZ);
-  wall.castShadow = true; // Walls cast shadows to block light
-  wall.receiveShadow = true; // Walls can receive shadows
-  scene.add(wall);
-  mazeVoxels.push(wall);
+
+  // Track which cells have been processed
+  const processed = Array(ROWS).fill(null).map(() => Array(COLS).fill(false));
+
+  // Create floors first
+  for (let y = 0; y < ROWS; y++) {
+    for (let x = 0; x < COLS; x++) {
+      const cellType = MAP[y][x];
+      if (cellType === 0 || cellType === 2) { // Path or teleport - create floor voxels
+        const worldX = x * CELL_SIZE;
+        const worldZ = y * CELL_SIZE;
+        createFloorVoxels(worldX, worldZ, cellType === 2);
+      }
+    }
+  }
+
+  // Merge walls: find horizontal and vertical runs of walls
+  for (let y = 0; y < ROWS; y++) {
+    for (let x = 0; x < COLS; x++) {
+      if (processed[y][x] || MAP[y][x] !== 1) continue;
+      
+      const isOuterWall = x === 0 || x === COLS - 1 || y === 0 || y === ROWS - 1;
+      
+      // Try to find a horizontal run first
+      let width = 1;
+      while (x + width < COLS && 
+             MAP[y][x + width] === 1 && 
+             !processed[y][x + width] &&
+             (x + width === 0 || x + width === COLS - 1 || y === 0 || y === ROWS - 1) === isOuterWall) {
+        width++;
+      }
+      
+      // Try to extend vertically if we can form a rectangle
+      let height = 1;
+      let canExtendVertically = true;
+      while (canExtendVertically && y + height < ROWS) {
+        // Check if entire row can be extended
+        for (let w = 0; w < width; w++) {
+          if (MAP[y + height][x + w] !== 1 || processed[y + height][x + w]) {
+            canExtendVertically = false;
+            break;
+          }
+          // Check if wall type matches (outer vs inner)
+          const cellIsOuter = (x + w === 0 || x + w === COLS - 1 || y + height === 0 || y + height === ROWS - 1);
+          if (cellIsOuter !== isOuterWall) {
+            canExtendVertically = false;
+            break;
+          }
+        }
+        if (canExtendVertically) {
+          height++;
+        }
+      }
+      
+      // Create merged wall block
+      const worldX = x * CELL_SIZE;
+      const worldZ = y * CELL_SIZE;
+      const blockWidth = width * CELL_SIZE;
+      const blockDepth = height * CELL_SIZE;
+      
+      const wallGeometry = new THREE.BoxGeometry(blockWidth, VOXEL_HEIGHT, blockDepth);
+      const wallMaterial = isOuterWall ? outerWallMaterial3D : innerWallMaterial3D;
+      const wall = new THREE.Mesh(wallGeometry, wallMaterial);
+      // Position at the center of the merged block
+      wall.position.set(
+        worldX + blockWidth / 2,
+        VOXEL_HEIGHT / 2,
+        worldZ + blockDepth / 2
+      );
+      wall.castShadow = true;
+      wall.receiveShadow = true;
+      scene.add(wall);
+      mazeVoxels.push(wall);
+      
+      // Mark cells as processed
+      for (let h = 0; h < height; h++) {
+        for (let w = 0; w < width; w++) {
+          processed[y + h][x + w] = true;
+        }
+      }
+    }
+  }
 }
+
+// This function is no longer used - walls are now merged in createMazeVoxels()
+// Keeping it for reference but it's been replaced by the merging algorithm
 
 function createFloorVoxels(worldX, worldZ, isTeleport = false) {
   // Optimize: Create a single plane per cell instead of multiple voxels

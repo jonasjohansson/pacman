@@ -560,7 +560,7 @@ function toggle3DView(enabled) {
       window.lightControllers.point.show();
       window.lightControllers.pathColor.show();
     }
-    
+
     // Initialize 3D wall colors from current GUI params
     if (window.render3D) {
       if (window.render3D.setInnerWallColor) {
@@ -667,8 +667,12 @@ function init() {
     gui.add(guiParams, "startGameCycle").name("Start game cycle");
     gui.add(guiParams, "resetGameCycle").name("Reset game cycle");
 
+    // Create 2D/3D folder
+    const view3DFolder = gui.addFolder("2D/3D");
+    view3DFolder.open(); // Open by default
+
     // 3D view toggle
-    gui
+    view3DFolder
       .add(guiParams, "view3D")
       .name("3D View")
       .onChange((value) => {
@@ -677,7 +681,7 @@ function init() {
       });
 
     // 3D camera type toggle
-    gui
+    view3DFolder
       .add(guiParams, "camera3D", ["Orthographic", "Perspective"])
       .name("3D Camera")
       .onChange((value) => {
@@ -689,7 +693,7 @@ function init() {
       });
 
     // 3D lighting controls (only visible when 3D view is enabled)
-    const ambientLightCtrl = gui
+    const ambientLightCtrl = view3DFolder
       .add(guiParams, "ambientLightIntensity", 0, 2, 0.1)
       .name("Ambient Light")
       .onChange((value) => {
@@ -699,7 +703,7 @@ function init() {
       });
     ambientLightCtrl.hide(); // Hidden by default
 
-    const directionalLightCtrl = gui
+    const directionalLightCtrl = view3DFolder
       .add(guiParams, "directionalLightIntensity", 0, 2, 0.1)
       .name("Directional Light")
       .onChange((value) => {
@@ -709,7 +713,7 @@ function init() {
       });
     directionalLightCtrl.hide(); // Hidden by default
 
-    const pointLightCtrl = gui
+    const pointLightCtrl = view3DFolder
       .add(guiParams, "pointLightIntensity", 0, 100, 1)
       .name("Point Light Intensity")
       .onChange((value) => {
@@ -795,7 +799,7 @@ function init() {
     // Set initial wall color values for 2D
     document.documentElement.style.setProperty("--color-inner-wall-border", guiParams.innerWallColor);
     document.documentElement.style.setProperty("--color-outer-wall-border", guiParams.outerWallColor);
-    
+
     // Initialize 3D wall colors (will be applied when 3D mode is enabled)
     // This ensures colors are set correctly when switching to 3D mode
 
@@ -820,7 +824,12 @@ function init() {
 
     // Auto-join is now handled via character selection UI and server availability
 
-    gui
+    // Create Characters & Scoring folder
+    const charactersFolder = gui.addFolder("Characters & Scoring");
+    charactersFolder.open(); // Open by default
+
+    // AI Skill control
+    charactersFolder
       .add(guiParams, "difficulty", 0, 1, 0.1)
       .name("AI Skill")
       .onChange((value) => {
@@ -828,23 +837,19 @@ function init() {
       });
 
     // Global speed controls
-    gui
+    charactersFolder
       .add(guiParams, "fugitiveSpeed", 0.2, 3, 0.1)
       .name("Fugitive Speed")
       .onChange((value) => {
         sendSpeedConfig(value, guiParams.chaserSpeed);
       });
 
-    gui
+    charactersFolder
       .add(guiParams, "chaserSpeed", 0.2, 3, 0.1)
       .name("Chaser Speed")
       .onChange((value) => {
         sendSpeedConfig(guiParams.fugitiveSpeed, value);
       });
-
-    // Create Characters & Scoring folder
-    const charactersFolder = gui.addFolder("Characters & Scoring");
-    charactersFolder.open(); // Open by default
 
     // Character selection: one entry per pacman/ghost/color
     const joinActions = {};
