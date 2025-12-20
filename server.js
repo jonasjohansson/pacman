@@ -651,7 +651,7 @@ function gameLoop() {
             // Award point for surviving the round + items collected this round
             player.stats.itemsCollected += pacman.itemsCollected || 0;
             // Fugitive score = survival points (1 per round survived) + items collected
-            player.stats.fugitiveScore = (player.stats.rounds + 1) + player.stats.itemsCollected;
+            player.stats.fugitiveScore = player.stats.rounds + 1 + player.stats.itemsCollected;
             player.stats.rounds++;
 
             // Check if player completed 10 rounds
