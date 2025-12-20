@@ -627,6 +627,8 @@ function init() {
       pointLightIntensity: 40, // Point light intensity for characters (0-100 range)
       wallColor: "#ffffff", // Wall color in hex (white)
       pathColor: "#777777", // Path/floor color in hex (gray)
+      innerWallColor: "#ffffff", // Inner wall color in hex (white)
+      outerWallColor: "#ffffff", // Outer wall color in hex (white)
       itemsEnabled: false, // Toggle for yellow dots/items
       buildingOpacity: 1.0, // Building image opacity (0-1)
       mazeOpacity: 1.0, // Maze opacity (0-1)
@@ -768,6 +770,32 @@ function init() {
         }
       });
 
+    // Inner wall color control
+    gui
+      .addColor(guiParams, "innerWallColor")
+      .name("Inner Wall Color")
+      .onChange((value) => {
+        document.documentElement.style.setProperty("--color-inner-wall-border", value);
+        // Update existing walls
+        const innerWalls = document.querySelectorAll(".wall:not(.outer-wall)");
+        innerWalls.forEach((wall) => {
+          wall.style.borderColor = value;
+        });
+      });
+
+    // Outer wall color control
+    gui
+      .addColor(guiParams, "outerWallColor")
+      .name("Outer Wall Color")
+      .onChange((value) => {
+        document.documentElement.style.setProperty("--color-outer-wall-border", value);
+        // Update existing walls
+        const outerWalls = document.querySelectorAll(".wall.outer-wall");
+        outerWalls.forEach((wall) => {
+          wall.style.borderColor = value;
+        });
+      });
+
     // Set initial opacity values
     const buildingImage = document.getElementById("building-image");
     if (buildingImage) {
@@ -777,6 +805,10 @@ function init() {
     if (maze) {
       maze.style.opacity = guiParams.mazeOpacity;
     }
+
+    // Set initial wall color values
+    document.documentElement.style.setProperty("--color-inner-wall-border", guiParams.innerWallColor);
+    document.documentElement.style.setProperty("--color-outer-wall-border", guiParams.outerWallColor);
 
     // Store controllers for showing/hiding
     window.lightControllers = {
@@ -908,6 +940,11 @@ function init() {
         if (isEdgeRight) classes.push("edge-right");
         if (isEdgeBottom) classes.push("edge-bottom");
         if (isEdgeLeft) classes.push("edge-left");
+
+        // Mark outer walls (walls on the border of the map)
+        if (isEdge) {
+          classes.push("outer-wall");
+        }
 
         // Add rounded corner classes where two borders meet
         if (hasPathTop && hasPathRight) classes.push("corner-top-right");

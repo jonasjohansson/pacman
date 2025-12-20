@@ -2,6 +2,8 @@
   /* Colors */
   --color-bg: #000;
   --color-wall-border: #ffffff;
+  --color-inner-wall-border: #ffffff;
+  --color-outer-wall-border: #ffffff;
   --color-path-bg: #000;
   --color-wall-bg: transparent;
   --color-text: #ffffff;
@@ -66,36 +68,54 @@ body {
   border: none;
 }
 
+/* Inner walls use inner wall color */
 .wall.border-top {
-  border-top: var(--border-width) var(--border-style) var(--color-wall-border);
+  border-top: var(--border-width) var(--border-style) var(--color-inner-wall-border);
 }
 
 .wall.border-right {
-  border-right: var(--border-width) var(--border-style) var(--color-wall-border);
+  border-right: var(--border-width) var(--border-style) var(--color-inner-wall-border);
 }
 
 .wall.border-bottom {
-  border-bottom: var(--border-width) var(--border-style) var(--color-wall-border);
+  border-bottom: var(--border-width) var(--border-style) var(--color-inner-wall-border);
 }
 
 .wall.border-left {
-  border-left: var(--border-width) var(--border-style) var(--color-wall-border);
+  border-left: var(--border-width) var(--border-style) var(--color-inner-wall-border);
+}
+
+/* Outer walls use outer wall color */
+.wall.outer-wall.border-top {
+  border-top: var(--border-width) var(--border-style) var(--color-outer-wall-border);
+}
+
+.wall.outer-wall.border-right {
+  border-right: var(--border-width) var(--border-style) var(--color-outer-wall-border);
+}
+
+.wall.outer-wall.border-bottom {
+  border-bottom: var(--border-width) var(--border-style) var(--color-outer-wall-border);
+}
+
+.wall.outer-wall.border-left {
+  border-left: var(--border-width) var(--border-style) var(--color-outer-wall-border);
 }
 
 .wall.edge-top {
-  border-top: var(--border-width) var(--border-style) var(--color-wall-border);
+  border-top: var(--border-width) var(--border-style) var(--color-outer-wall-border);
 }
 
 .wall.edge-right {
-  border-right: var(--border-width) var(--border-style) var(--color-wall-border);
+  border-right: var(--border-width) var(--border-style) var(--color-outer-wall-border);
 }
 
 .wall.edge-bottom {
-  border-bottom: var(--border-width) var(--border-style) var(--color-wall-border);
+  border-bottom: var(--border-width) var(--border-style) var(--color-outer-wall-border);
 }
 
 .wall.edge-left {
-  border-left: var(--border-width) var(--border-style) var(--color-wall-border);
+  border-left: var(--border-width) var(--border-style) var(--color-outer-wall-border);
 }
 
 .wall.corner-top-right {
