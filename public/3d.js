@@ -28,7 +28,7 @@ let innerWallMaterial3D, outerWallMaterial3D, floorMaterial3D, teleportMaterial3
 function init3D() {
   // Scene
   scene = new THREE.Scene();
-  scene.background = new THREE.Color(0x000000);
+  scene.background = null; // Transparent background so building image is visible
 
   // Create both orthographic and perspective cameras
   const viewSize = Math.max(COLS * CELL_SIZE, ROWS * CELL_SIZE) * 1.2;
@@ -81,8 +81,9 @@ function init3D() {
     console.error("Canvas element not found");
     return;
   }
-  renderer = new THREE.WebGLRenderer({ canvas, antialias: true });
+  renderer = new THREE.WebGLRenderer({ canvas, antialias: true, alpha: true });
   renderer.setSize(window.innerWidth, window.innerHeight);
+  renderer.setClearColor(0x000000, 0); // Transparent background
   renderer.shadowMap.enabled = true; // Enable shadows so lights are blocked by walls
   renderer.shadowMap.type = THREE.PCFSoftShadowMap; // Soft shadows
 

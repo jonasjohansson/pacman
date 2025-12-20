@@ -262,5 +262,6 @@ a:visited {
   object-fit: contain;
   object-position: 15px;
   padding-right: 30px;
-  z-index: 0;
+  z-index: 4; /* Below 3D canvas (z-index: 5) but visible when canvas background is transparent */
+  pointer-events: none; /* Allow clicks to pass through to 3D canvas */
 }

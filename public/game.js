@@ -675,6 +675,14 @@ function init() {
     gui.add(guiParams, "startGameCycle").name("Start game cycle");
     gui.add(guiParams, "resetGameCycle").name("Reset game cycle");
 
+    // Server control
+    gui
+      .add(guiParams, "serverTarget", ["Render", "Local"])
+      .name("Server")
+      .onChange((value) => {
+        switchServer(value === "Local");
+      });
+
     // Create 2D/3D folder
     const view3DFolder = gui.addFolder("2D/3D");
     view3DFolder.open(); // Open by default
@@ -822,13 +830,6 @@ function init() {
     // Join Queue button (only shown when all slots are full)
     window.joinQueueController = gui.add(guiParams, "joinQueue").name("Join Queue");
     window.joinQueueController.hide(); // Hidden by default
-
-    gui
-      .add(guiParams, "serverTarget", ["Render", "Local"])
-      .name("Server")
-      .onChange((value) => {
-        switchServer(value === "Local");
-      });
 
     // Auto-join is now handled via character selection UI and server availability
 
