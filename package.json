@@ -2,16 +2,20 @@
   "name": "pacman-multiplayer",
   "version": "1.0.0",
   "description": "Multiplayer Pacman game server",
-  "main": "server.js",
+  "main": "server/server.js",
   "scripts": {
-    "start": "node server.js",
-    "dev": "node server.js"
+    "start": "node server/server.js",
+    "dev": "node server/server.js"
   },
-  "keywords": ["pacman", "multiplayer", "websocket", "game"],
+  "keywords": [
+    "pacman",
+    "multiplayer",
+    "websocket",
+    "game"
+  ],
   "author": "",
   "license": "ISC",
   "dependencies": {
     "ws": "^8.16.0"
   }
 }
-

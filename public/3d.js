@@ -26,6 +26,7 @@ let chaserLights = []; // Point lights for chasers
 let ambientLight3D, directionalLight3D; // Global lights for intensity control
 let innerWallMaterial3D, outerWallMaterial3D, floorMaterial3D, teleportMaterial3D; // Materials for color control
 let colorOverrides = [null, null, null, null]; // Color overrides for each color index (red, green, blue, yellow)
+let teamImages = [null, null, null, null]; // Team images for each color index (red, green, blue, yellow)
 
 // Initialize 3D rendering
 function init3D() {
@@ -266,12 +267,27 @@ function createFugitive3D(color, x, y, px, py) {
   const colorIndex = COLORS.indexOf(color.toLowerCase());
   const colorHex =
     colorIndex >= 0 && colorOverrides[colorIndex] !== null ? new THREE.Color(colorOverrides[colorIndex]).getHex() : getColorHex(color);
-  const material = new THREE.MeshStandardMaterial({
-    color: colorHex,
-    emissive: 0x000000, // No emissive - rely on lights
-    roughness: 0.4,
-    metalness: 0.1,
-  });
+
+  // Create material with optional texture
+  let material;
+  if (colorIndex >= 0 && teamImages[colorIndex] !== null && teamImages[colorIndex].trim() !== "") {
+    const textureLoader = new THREE.TextureLoader();
+    const texture = textureLoader.load(teamImages[colorIndex]);
+    material = new THREE.MeshStandardMaterial({
+      map: texture,
+      color: 0xffffff, // Use white to show texture colors properly
+      emissive: 0x000000, // No emissive - rely on lights
+      roughness: 0.4,
+      metalness: 0.1,
+    });
+  } else {
+    material = new THREE.MeshStandardMaterial({
+      color: colorHex,
+      emissive: 0x000000, // No emissive - rely on lights
+      roughness: 0.4,
+      metalness: 0.1,
+    });
+  }
   const fugitive = new THREE.Mesh(geometry, material);
   fugitive.position.set(0, 0, 0); // Position relative to group
   fugitive.castShadow = false; // Don't cast shadows on floor to avoid artifacts
@@ -594,6 +610,37 @@ function setPathColor(colorHex) {
   }
 }
 
+function setTeamImage(colorIndex, imagePath) {
+  // Store team image for this color index (empty string means no image)
+  if (colorIndex >= 0 && colorIndex < 4) {
+    teamImages[colorIndex] = imagePath;
+
+    // Update existing fugitive of this color
+    if (fugitives3D[colorIndex] && fugitives3D[colorIndex].mesh) {
+      const fugitive = fugitives3D[colorIndex];
+      fugitive.mesh.children.forEach((child) => {
+        if (child instanceof THREE.Mesh && child.material) {
+          if (imagePath && imagePath.trim() !== "") {
+            // Load and apply texture
+            const textureLoader = new THREE.TextureLoader();
+            const texture = textureLoader.load(imagePath);
+            child.material.map = texture;
+            child.material.color.setHex(0xffffff); // Use white to show texture colors
+            child.material.needsUpdate = true;
+          } else {
+            // Remove texture, use color
+            child.material.map = null;
+            const colorHex =
+              colorOverrides[colorIndex] !== null ? new THREE.Color(colorOverrides[colorIndex]).getHex() : getColorHex(COLORS[colorIndex]);
+            child.material.color.setHex(colorHex);
+            child.material.needsUpdate = true;
+          }
+        }
+      });
+    }
+  }
+}
+
 function setColorOverride(colorIndex, colorHex) {
   // Store color override for this color index (null means use individual colors)
   if (colorIndex >= 0 && colorIndex < 4) {
@@ -610,12 +657,15 @@ function setColorOverride(colorIndex, colorHex) {
       const fugitive = fugitives3D[colorIndex];
       fugitive.mesh.children.forEach((child) => {
         if (child instanceof THREE.Mesh && child.material) {
-          if (color) {
-            child.material.color.copy(color);
-          } else {
-            // Reset to original color
-            const originalColor = getColorHex(targetColorName);
-            child.material.color.setHex(originalColor);
+          // Only update color if not using texture
+          if (!child.material.map) {
+            if (color) {
+              child.material.color.copy(color);
+            } else {
+              // Reset to original color
+              const originalColor = getColorHex(targetColorName);
+              child.material.color.setHex(originalColor);
+            }
           }
         }
         if (child instanceof THREE.PointLight) {
@@ -684,6 +734,7 @@ window.render3D = {
   setOuterWallColor: setOuterWallColor,
   setPathColor: setPathColor,
   setColorOverride: setColorOverride,
+  setTeamImage: setTeamImage,
   setCameraZoom: setCameraZoom,
   useOrthographic: () => useOrthographic,
   initialized: false,

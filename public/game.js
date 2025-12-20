@@ -595,6 +595,12 @@ function toggle3DView(enabled) {
         if (overrideColor && overrideColor !== defaultColors[colorIndex] && window.render3D.setColorOverride) {
           window.render3D.setColorOverride(colorIndex, overrideColor);
         }
+        // Initialize team images
+        const imageKey = `team${colorIndex + 1}Image`;
+        const teamImage = guiParams[imageKey];
+        if (teamImage && teamImage.trim() !== "" && window.render3D.setTeamImage) {
+          window.render3D.setTeamImage(colorIndex, teamImage);
+        }
       });
       // Initialize camera zoom
       if (window.render3D.setCameraZoom) {
@@ -688,6 +694,10 @@ function init() {
       greenColor: "#00ff00", // Green color override
       blueColor: "#0000ff", // Blue color override
       yellowColor: "#ffff00", // Yellow color override
+      team1Image: "assets/team1.jpg", // Team 1 image path (empty = no image)
+      team2Image: "assets/team2.jpg", // Team 2 image path (empty = no image)
+      team3Image: "assets/team3.jpg", // Team 3 image path (empty = no image)
+      team4Image: "assets/team4.jpg", // Team 4 image path (empty = no image)
       startGameCycle: () => startGame(),
       resetGameCycle: () => restartGame(),
       joinQueue: () => joinQueue(),
@@ -1061,7 +1071,7 @@ function init() {
       const displayName = `Team ${teamNumber} Color`;
 
       const defaultColors = ["#ff0000", "#00ff00", "#0000ff", "#ffff00"];
-      charactersFolder
+      const colorCtrl = charactersFolder
         .addColor(guiParams, colorKey)
         .name(displayName)
         .onChange((value) => {
@@ -1098,6 +1108,34 @@ function init() {
             }
           }
         });
+
+      // Team image control (for fugitives only)
+      const imageKey = `team${teamNumber}Image`;
+      charactersFolder
+        .add(guiParams, imageKey)
+        .name(`Team ${teamNumber} Image`)
+        .onChange((value) => {
+          // Update 2D fugitive image
+          if (pacmen[colorIndex] && pacmen[colorIndex].element) {
+            if (value && value.trim() !== "") {
+              pacmen[colorIndex].element.style.backgroundImage = `url(${value})`;
+              pacmen[colorIndex].element.style.backgroundSize = "cover";
+              pacmen[colorIndex].element.style.backgroundPosition = "center";
+              pacmen[colorIndex].element.style.backgroundRepeat = "no-repeat";
+            } else {
+              pacmen[colorIndex].element.style.backgroundImage = "";
+              pacmen[colorIndex].element.style.backgroundSize = "";
+              pacmen[colorIndex].element.style.backgroundPosition = "";
+              pacmen[colorIndex].element.style.backgroundRepeat = "";
+              updateCharacterAppearance(pacmen[colorIndex]);
+            }
+          }
+
+          // Update 3D fugitive image
+          if (view3D && window.render3D && window.render3D.setTeamImage) {
+            window.render3D.setTeamImage(colorIndex, value);
+          }
+        });
     });
 
     // Score display
@@ -1106,6 +1144,18 @@ function init() {
       fugitiveScore: charactersFolder.add({ value: 0 }, "value").name("Fugitive Score").disable(),
       rounds: charactersFolder.add({ value: 0 }, "value").name("Rounds").disable(),
     };
+
+    // Apply team images to existing characters after GUI is initialized
+    COLORS.forEach((colorName, colorIndex) => {
+      const imageKey = `team${colorIndex + 1}Image`;
+      const teamImage = guiParams[imageKey];
+      if (teamImage && teamImage.trim() !== "" && pacmen[colorIndex] && pacmen[colorIndex].element) {
+        pacmen[colorIndex].element.style.backgroundImage = `url(${teamImage})`;
+        pacmen[colorIndex].element.style.backgroundSize = "cover";
+        pacmen[colorIndex].element.style.backgroundPosition = "center";
+        pacmen[colorIndex].element.style.backgroundRepeat = "no-repeat";
+      }
+    });
   }
   const maze = document.getElementById("maze");
   maze.style.width = COLS * CELL_SIZE + "px";
@@ -1683,10 +1733,27 @@ function updateCharacterAppearance(character) {
     }
   }
 
-  // Update image
-  if (character.image && character.image.trim() !== "") {
+  // Update image - check for team image first, then character.image
+  let imageToUse = null;
+  if (isPacman && character.color) {
+    const colorIndex = COLORS.indexOf(character.color.toLowerCase());
+    if (colorIndex >= 0 && window.guiParams) {
+      const imageKey = `team${colorIndex + 1}Image`;
+      const teamImage = window.guiParams[imageKey];
+      if (teamImage && teamImage.trim() !== "") {
+        imageToUse = teamImage;
+      }
+    }
+  }
+
+  // Fall back to character.image if no team image is set
+  if (!imageToUse && character.image && character.image.trim() !== "") {
+    imageToUse = character.image;
+  }
+
+  if (imageToUse) {
     if (isPacman) {
-      el.style.backgroundImage = `url(${character.image})`;
+      el.style.backgroundImage = `url(${imageToUse})`;
       el.style.backgroundSize = "cover";
       el.style.backgroundPosition = "center";
       el.style.backgroundRepeat = "no-repeat";
@@ -1695,7 +1762,7 @@ function updateCharacterAppearance(character) {
         el.style.backgroundColor = character.color;
       }
     } else if (isGhost) {
-      el.style.backgroundImage = `url(${character.image})`;
+      el.style.backgroundImage = `url(${imageToUse})`;
       el.style.backgroundSize = "cover";
       el.style.backgroundPosition = "center";
       el.style.backgroundRepeat = "no-repeat";
