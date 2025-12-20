@@ -265,3 +265,18 @@ a:visited {
   z-index: 6; /* Above 3D canvas (z-index: 5) so it's visible in 3D view */
   pointer-events: none; /* Allow clicks to pass through to 3D canvas */
 }
+
+#building-real-image {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  width: calc(42 * var(--cell-size)); /* COLS * CELL_SIZE */
+  height: calc(24 * var(--cell-size)); /* ROWS * CELL_SIZE */
+  object-fit: cover;
+  object-position: 15px;
+  padding-right: 30px;
+  overflow: visible;
+  z-index: 6; /* Above 3D canvas (z-index: 5) so it's visible in 3D view */
+  pointer-events: none; /* Allow clicks to pass through to 3D canvas */
+}

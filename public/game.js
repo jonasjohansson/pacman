@@ -547,13 +547,15 @@ function toggle3DView(enabled) {
   const gameContainer = document.getElementById("game-container");
   const canvas = document.getElementById("webgl-canvas");
   const buildingImage = document.getElementById("building-image");
+  const buildingRealImage = document.getElementById("building-real-image");
 
   if (enabled) {
     // Hide 2D view, show 3D canvas
     if (gameContainer) gameContainer.style.display = "none";
     if (canvas) canvas.style.display = "block";
-    // Keep building image visible in 3D mode
+    // Keep building images visible in 3D mode
     if (buildingImage) buildingImage.style.display = "block";
+    if (buildingRealImage) buildingRealImage.style.display = "block";
 
     // Initialize 3D if not already initialized
     if (window.render3D && !window.render3D.initialized) {
@@ -582,8 +584,9 @@ function toggle3DView(enabled) {
     // Show 2D view, hide 3D canvas
     if (gameContainer) gameContainer.style.display = "block";
     if (canvas) canvas.style.display = "none";
-    // Keep building image visible in 2D mode
+    // Keep building images visible in 2D mode
     if (buildingImage) buildingImage.style.display = "block";
+    if (buildingRealImage) buildingRealImage.style.display = "block";
 
     // Hide lighting and color controls
     if (window.lightControllers) {
@@ -646,6 +649,11 @@ function init() {
       innerWallColor: "#ffffff", // Inner wall color in hex (white)
       outerWallColor: "#ffffff", // Outer wall color in hex (white)
       buildingOpacity: 0.0, // Building image opacity (0-1)
+      buildingRealOpacity: 0.0, // Building real image opacity (0-1)
+      buildingRealScale: 1.1, // Building real image scale (0.1-3.0)
+      buildingRealX: 9, // Building real image X position offset (px)
+      buildingRealY: 9, // Building real image Y position offset (px)
+      buildingRealBlendMode: "hard-light", // Building real image blend mode
       mazeOpacity: 1.0, // Maze opacity (0-1)
       startGameCycle: () => startGame(),
       resetGameCycle: () => restartGame(),
@@ -780,17 +788,6 @@ function init() {
       });
     pathColorCtrl.hide(); // Hidden by default
 
-    // Building image opacity slider
-    styleFolder
-      .add(guiParams, "buildingOpacity", 0, 1, 0.01)
-      .name("Building Opacity")
-      .onChange((value) => {
-        const buildingImage = document.getElementById("building-image");
-        if (buildingImage) {
-          buildingImage.style.opacity = value;
-        }
-      });
-
     // Maze opacity slider
     styleFolder
       .add(guiParams, "mazeOpacity", 0, 1, 0.01)
@@ -802,10 +799,106 @@ function init() {
         }
       });
 
+    // Create Building folder for building image controls
+    const buildingFolder = gui.addFolder("Building");
+    buildingFolder.open(); // Open by default
+
+    // Building image opacity slider
+    buildingFolder
+      .add(guiParams, "buildingOpacity", 0, 1, 0.01)
+      .name("Building Opacity")
+      .onChange((value) => {
+        const buildingImage = document.getElementById("building-image");
+        if (buildingImage) {
+          buildingImage.style.opacity = value;
+        }
+      });
+
+    // Building real image opacity slider
+    buildingFolder
+      .add(guiParams, "buildingRealOpacity", 0, 1, 0.01)
+      .name("Building Real Opacity")
+      .onChange((value) => {
+        const buildingRealImage = document.getElementById("building-real-image");
+        if (buildingRealImage) {
+          buildingRealImage.style.opacity = value;
+        }
+      });
+
+    // Helper function to update building-real transform
+    const updateBuildingRealTransform = () => {
+      const buildingRealImage = document.getElementById("building-real-image");
+      if (buildingRealImage) {
+        const translate = `translate(calc(-50% + ${guiParams.buildingRealX}px), calc(-50% + ${guiParams.buildingRealY}px))`;
+        buildingRealImage.style.transform = `${translate} scale(${guiParams.buildingRealScale})`;
+      }
+    };
+
+    // Building real image scale slider
+    buildingFolder
+      .add(guiParams, "buildingRealScale", 0.1, 3.0, 0.01)
+      .name("Building Real Scale")
+      .onChange(() => {
+        updateBuildingRealTransform();
+      });
+
+    // Building real image X position slider
+    buildingFolder
+      .add(guiParams, "buildingRealX", -500, 500, 1)
+      .name("Building Real X")
+      .onChange(() => {
+        updateBuildingRealTransform();
+      });
+
+    // Building real image Y position slider
+    buildingFolder
+      .add(guiParams, "buildingRealY", -500, 500, 1)
+      .name("Building Real Y")
+      .onChange(() => {
+        updateBuildingRealTransform();
+      });
+
+    // Building real image blend mode selector
+    buildingFolder
+      .add(guiParams, "buildingRealBlendMode", [
+        "normal",
+        "multiply",
+        "screen",
+        "overlay",
+        "darken",
+        "lighten",
+        "color-dodge",
+        "color-burn",
+        "hard-light",
+        "soft-light",
+        "difference",
+        "exclusion",
+        "hue",
+        "saturation",
+        "color",
+        "luminosity",
+      ])
+      .name("Building Real Blend Mode")
+      .onChange((value) => {
+        const buildingRealImage = document.getElementById("building-real-image");
+        if (buildingRealImage) {
+          buildingRealImage.style.mixBlendMode = value;
+        }
+      });
+
     // Set initial opacity values
     const buildingImage = document.getElementById("building-image");
     if (buildingImage) {
       buildingImage.style.opacity = guiParams.buildingOpacity;
+    }
+    const buildingRealImage = document.getElementById("building-real-image");
+    if (buildingRealImage) {
+      buildingRealImage.style.opacity = guiParams.buildingRealOpacity;
+      // Set initial transform with scale and position
+      const translate = `translate(calc(-50% + ${guiParams.buildingRealX}px), calc(-50% + ${guiParams.buildingRealY}px))`;
+      buildingRealImage.style.transform = `${translate} scale(${guiParams.buildingRealScale})`;
+      // Set initial blend mode
+      buildingRealImage.style.mixBlendMode = guiParams.buildingRealBlendMode;
     }
     const maze = document.getElementById("maze");
     if (maze) {
