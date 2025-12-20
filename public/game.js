@@ -644,12 +644,12 @@ function init() {
       camera3D: "Orthographic", // Camera type for 3D view
       ambientLightIntensity: 0.1, // Global ambient light intensity
       directionalLightIntensity: 0.3, // Global directional light intensity
-      pointLightIntensity: 40, // Point light intensity for characters (0-100 range)
+      pointLightIntensity: 40, // Point light intensity for characters (0-400 range)
       pathColor: "#777777", // Path/floor color in hex (gray)
       innerWallColor: "#ffffff", // Inner wall color in hex (white)
       outerWallColor: "#ffffff", // Outer wall color in hex (white)
       buildingOpacity: 0.0, // Building image opacity (0-1)
-      buildingRealOpacity: 0.0, // Building real image opacity (0-1)
+      buildingRealOpacity: 1.0, // Building real image opacity (0-1)
       buildingRealScale: 1.1, // Building real image scale (0.1-3.0)
       buildingRealX: 9, // Building real image X position offset (px)
       buildingRealY: 9, // Building real image Y position offset (px)
@@ -738,7 +738,7 @@ function init() {
     directionalLightCtrl.hide(); // Hidden by default
 
     const pointLightCtrl = view3DFolder
-      .add(guiParams, "pointLightIntensity", 0, 100, 1)
+      .add(guiParams, "pointLightIntensity", 0, 400, 1)
       .name("Point Light Intensity")
       .onChange((value) => {
         if (view3D && window.render3D && window.render3D.setPointLightIntensity) {
