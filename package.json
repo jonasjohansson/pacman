@@ -2,10 +2,10 @@
   "name": "pacman-multiplayer",
   "version": "1.0.0",
   "description": "Multiplayer Pacman game server",
-  "main": "server/server.js",
+  "main": "server.js",
   "scripts": {
-    "start": "node server/server.js",
-    "dev": "node server/server.js"
+    "start": "node server.js",
+    "dev": "node server.js"
   },
   "keywords": [
     "pacman",

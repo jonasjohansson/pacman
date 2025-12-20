@@ -5,7 +5,7 @@ const http = require("http");
 const fs = require("fs");
 const path = require("path");
 const { WebSocketServer } = require("ws");
-const { MAP, COLS, ROWS, TUNNEL_ROW } = require("../public/map");
+const { MAP, COLS, ROWS, TUNNEL_ROW } = require("./public/map");
 
 const PORT = process.env.PORT || 3000;
 
