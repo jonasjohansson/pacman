@@ -399,13 +399,13 @@ function handleServerMessage(data) {
       // Game was reset - clear caught state and player selection
       gameStarted = false;
       // Reset speed settings to defaults
-      guiParams.fugitiveSpeed = 0.8;
-      guiParams.chaserSpeed = 0.85;
+      guiParams.fugitiveSpeed = 0.4;
+      guiParams.chaserSpeed = 0.45;
       // Update GUI controllers if they exist
-      if (window.fugitiveSpeedController) window.fugitiveSpeedController.setValue(0.8);
-      if (window.chaserSpeedController) window.chaserSpeedController.setValue(0.85);
+      if (window.fugitiveSpeedController) window.fugitiveSpeedController.setValue(0.4);
+      if (window.chaserSpeedController) window.chaserSpeedController.setValue(0.45);
       // Send reset speed config to server
-      sendSpeedConfig(0.8, 0.85);
+      sendSpeedConfig(0.4, 0.45);
       // Clear our character selection (players lose selection when game resets)
       myCharacterType = null;
       myColorIndex = null;
@@ -1051,8 +1051,8 @@ function init() {
     window.guiParams = {
       serverTarget: "Render",
       difficulty: 0.8,
-      fugitiveSpeed: 0.8, // Fast-paced gameplay
-      chaserSpeed: 0.85, // Slightly faster than fugitives for chase dynamics
+      fugitiveSpeed: 0.4,
+      chaserSpeed: 0.45, // Slightly faster than fugitives
       gameDuration: 90, // Game duration in seconds
       playerInitials: "ABC", // 3-letter initials
       showDebug: false, // Show debug information

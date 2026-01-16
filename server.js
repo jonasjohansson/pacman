@@ -84,8 +84,8 @@ const gameState = {
   gameDuration: 90, // Game lasts 90 seconds
   aiDifficulty: 0.8,
   // Global speed multipliers for all fugitives and all chasers
-  fugitiveSpeed: 0.8, // Fast-paced gameplay
-  chaserSpeed: 0.85, // Slightly faster than fugitives for chase dynamics
+  fugitiveSpeed: 0.4,
+  chaserSpeed: 0.45, // Slightly faster than fugitives
   itemsEnabled: false, // Toggle for yellow dots/items
   fugitives: [],
   chasers: [],
@@ -546,10 +546,10 @@ function resetGame() {
   gameState.gameStarted = false;
   gameState.gameStartTime = null;
   gameState.caughtFugitives.clear();
-
+  
   // Reset speed settings to defaults
-  gameState.fugitiveSpeed = 0.8;
-  gameState.chaserSpeed = 0.85;
+  gameState.fugitiveSpeed = 0.4;
+  gameState.chaserSpeed = 0.45;
 
   // Clear all player selections - players lose their chaser selection when game resets
   // Free up all chaser slots
