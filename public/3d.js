@@ -277,17 +277,17 @@ function createFugitive3D(color, x, y, px, py) {
       map: texture,
       color: 0xffffff, // Use white to show texture colors properly
       emissive: colorHex, // Match light color for better blending
-      emissiveIntensity: 0.3, // Subtle glow
-      roughness: 0.4,
-      metalness: 0.1,
+      emissiveIntensity: 1.0, // Full emissive to eliminate dark halo
+      roughness: 0.1, // Very low roughness for bright, smooth surface
+      metalness: 0.0, // No metalness for softer appearance
     });
   } else {
     material = new THREE.MeshStandardMaterial({
       color: colorHex,
       emissive: colorHex, // Match light color for better blending
-      emissiveIntensity: 0.3, // Subtle glow
-      roughness: 0.4,
-      metalness: 0.1,
+      emissiveIntensity: 1.0, // Full emissive to eliminate dark halo
+      roughness: 0.1, // Very low roughness for bright, smooth surface
+      metalness: 0.0, // No metalness for softer appearance
     });
   }
   const fugitive = new THREE.Mesh(geometry, material);
@@ -297,11 +297,11 @@ function createFugitive3D(color, x, y, px, py) {
   group.add(fugitive);
 
   // Create a point light as a child of the character group
-  // Position light slightly above the character to avoid being inside the mesh
+  // Position light at center of character for even illumination
   const pointLight = new THREE.PointLight(colorHex, 100, 200);
-  pointLight.position.set(0, CHARACTER_SIZE / 2 + 2, 0); // Position above the character mesh
+  pointLight.position.set(0, 0, 0); // Position at center for even lighting
   pointLight.castShadow = false; // Don't cast shadows from avatars
-  pointLight.intensity = 100; // Default intensity
+  pointLight.intensity = 80; // Slightly reduced intensity since emissive provides glow
   pointLight.distance = 200; // Long range
   pointLight.decay = 1; // No decay (constant intensity)
   group.add(pointLight);
