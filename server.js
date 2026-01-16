@@ -1167,19 +1167,11 @@ function handleDisconnect(playerId) {
 
 function broadcast(message) {
   const data = JSON.stringify(message); // Stringify once, reuse for all clients
-  const readyClients = [];
-
-  // Filter ready clients first to avoid checking state multiple times
   wss.clients.forEach((client) => {
     if (client.readyState === 1) {
-      readyClients.push(client);
+      client.send(data);
     }
   });
-
-  // Send to all ready clients
-  for (let i = 0; i < readyClients.length; i++) {
-    readyClients[i].send(data);
-  }
 }
 
 function sendGameState(ws) {
@@ -1372,6 +1364,6 @@ function broadcastGameState() {
 // ========== START SERVER ==========
 initItems();
 initCharacters();
-setInterval(gameLoop, 33); // ~30fps server tick rate (optimal for network updates)
+setInterval(gameLoop, 16); // ~60fps game loop (smoother updates)
 
 server.listen(PORT, () => {});

@@ -670,6 +670,16 @@ const DIR_VECTORS = {
   right: { x: 1, y: 0 },
 };
 
+// Debug timing variables
+let pingStartTime = 0;
+let lastPingTime = 0;
+let avgPing = 0;
+let pingCount = 0;
+let inputSentTime = 0;
+let inputResponseTime = 0;
+let lastServerUpdateTime = Date.now();
+let serverUpdateInterval = 0;
+
 function sendInput(input) {
   if (!ws || ws.readyState !== WebSocket.OPEN || !myPlayerId) return;
   
@@ -684,21 +694,14 @@ function sendInput(input) {
   lastInputDir = input.dir;
   lastInputTime = now;
   
-  // CLIENT-SIDE PREDICTION: Immediately update local character for instant response
-  if ((myCharacterType === "chaser" || myCharacterType === "ghost") && myColorIndex !== null) {
-    const myChaser = ghosts[myColorIndex];
-    if (myChaser && input.dir && DIR_VECTORS[input.dir]) {
-      const dir = DIR_VECTORS[input.dir];
-      const newTargetX = myChaser.x + dir.x;
-      const newTargetY = myChaser.y + dir.y;
-      
-      // Only predict if the move is valid (basic validation)
-      if (newTargetX >= 0 && newTargetX < COLS && newTargetY >= 0 && newTargetY < ROWS && isPath(newTargetX, newTargetY)) {
-        myChaser.targetX = newTargetX;
-        myChaser.targetY = newTargetY;
-      }
-    }
+  // DEBUG: Track input timing
+  inputSentTime = now;
+  if (guiParams.showDebug) {
+    console.log(`[INPUT] Sent ${input.dir} at ${now}`);
   }
+  
+  // Note: Client-side prediction disabled - server is authoritative
+  // The server will process the input and send back the updated position
   
   ws.send(JSON.stringify({ type: "input", input: input }));
 }
@@ -711,6 +714,140 @@ function updateScoreDisplay() {
   if (myPlayer && myPlayer.stats) {
     window.scoreDisplay.chaserScore.setValue(myPlayer.stats.chaserScore || 0);
     window.scoreDisplay.rounds.setValue(myPlayer.stats.rounds || 0);
+  }
+}
+
+// Debug display functions
+function createDebugDisplay() {
+  removeDebugDisplay(); // Remove existing if any
+  
+  const debugDiv = document.createElement("div");
+  debugDiv.id = "debug-display";
+  debugDiv.style.position = "fixed";
+  debugDiv.style.top = "10px";
+  debugDiv.style.left = "10px";
+  debugDiv.style.backgroundColor = "rgba(0, 0, 0, 0.8)";
+  debugDiv.style.color = "#0f0";
+  debugDiv.style.fontFamily = "monospace";
+  debugDiv.style.fontSize = "12px";
+  debugDiv.style.padding = "10px";
+  debugDiv.style.borderRadius = "5px";
+  debugDiv.style.zIndex = "10000";
+  debugDiv.style.pointerEvents = "none";
+  document.body.appendChild(debugDiv);
+  
+  // Start update loop
+  updateDebugDisplay();
+}
+
+function removeDebugDisplay() {
+  const debugDiv = document.getElementById("debug-display");
+  if (debugDiv) {
+    debugDiv.remove();
+  }
+}
+
+function updateDebugDisplay() {
+  const debugDiv = document.getElementById("debug-display");
+  if (!debugDiv || !guiParams.showDebug) return;
+  
+  const now = Date.now();
+  const fps = animationId ? Math.round(1000 / 16) : 0; // Approximate
+  
+  // Calculate ping (simulate with round-trip)
+  const ping = inputResponseTime > 0 ? Math.round(inputResponseTime / 2) : 0;
+  
+  let html = `<strong>DEBUG INFO</strong><br>`;
+  html += `─────────────────────<br>`;
+  html += `FPS: ${fps}<br>`;
+  html += `Ping: ${ping}ms<br>`;
+  html += `Server Update: ${serverUpdateInterval}ms<br>`;
+  html += `Input Response: ${inputResponseTime}ms<br>`;
+  html += `─────────────────────<br>`;
+  html += `Connected: ${multiplayerMode ? "Yes" : "No"}<br>`;
+  html += `Player ID: ${myPlayerId || "None"}<br>`;
+  html += `Character: ${myCharacterType || "None"}<br>`;
+  html += `Color Index: ${myColorIndex !== null ? myColorIndex : "None"}<br>`;
+  html += `─────────────────────<br>`;
+  
+  if (myColorIndex !== null && ghosts[myColorIndex]) {
+    const ghost = ghosts[myColorIndex];
+    html += `Position: (${ghost.x}, ${ghost.y})<br>`;
+    html += `Target: (${ghost.targetX}, ${ghost.targetY})<br>`;
+    html += `Pixel: (${Math.round(ghost.px)}, ${Math.round(ghost.py)})<br>`;
+  }
+  
+  debugDiv.innerHTML = html;
+  
+  if (guiParams.showDebug) {
+    setTimeout(updateDebugDisplay, 100); // Update every 100ms
+  }
+}
+
+// Debug display functions
+function createDebugDisplay() {
+  removeDebugDisplay(); // Remove existing if any
+  
+  const debugDiv = document.createElement("div");
+  debugDiv.id = "debug-display";
+  debugDiv.style.position = "fixed";
+  debugDiv.style.top = "10px";
+  debugDiv.style.left = "10px";
+  debugDiv.style.backgroundColor = "rgba(0, 0, 0, 0.8)";
+  debugDiv.style.color = "#0f0";
+  debugDiv.style.fontFamily = "monospace";
+  debugDiv.style.fontSize = "12px";
+  debugDiv.style.padding = "10px";
+  debugDiv.style.borderRadius = "5px";
+  debugDiv.style.zIndex = "10000";
+  debugDiv.style.pointerEvents = "none";
+  document.body.appendChild(debugDiv);
+  
+  // Start update loop
+  updateDebugDisplay();
+}
+
+function removeDebugDisplay() {
+  const debugDiv = document.getElementById("debug-display");
+  if (debugDiv) {
+    debugDiv.remove();
+  }
+}
+
+function updateDebugDisplay() {
+  const debugDiv = document.getElementById("debug-display");
+  if (!debugDiv || !guiParams.showDebug) return;
+  
+  const now = Date.now();
+  const fps = animationId ? Math.round(1000 / 16) : 0; // Approximate
+  
+  // Calculate ping (simulate with round-trip)
+  const ping = inputResponseTime > 0 ? Math.round(inputResponseTime / 2) : 0;
+  
+  let html = `<strong>DEBUG INFO</strong><br>`;
+  html += `─────────────────────<br>`;
+  html += `FPS: ${fps}<br>`;
+  html += `Ping: ${ping}ms<br>`;
+  html += `Server Update: ${serverUpdateInterval}ms<br>`;
+  html += `Input Response: ${inputResponseTime}ms<br>`;
+  html += `─────────────────────<br>`;
+  html += `Connected: ${multiplayerMode ? "Yes" : "No"}<br>`;
+  html += `Player ID: ${myPlayerId || "None"}<br>`;
+  html += `Character: ${myCharacterType || "None"}<br>`;
+  html += `Color Index: ${myColorIndex !== null ? myColorIndex : "None"}<br>`;
+  html += `─────────────────────<br>`;
+  
+  if (myColorIndex !== null && ghosts[myColorIndex]) {
+    const ghost = ghosts[myColorIndex];
+    html += `Position: (${ghost.x}, ${ghost.y})<br>`;
+    html += `Target: (${ghost.targetX}, ${ghost.targetY})<br>`;
+    html += `Pixel: (${Math.round(ghost.px)}, ${Math.round(ghost.py)})<br>`;
+  }
+  
+  debugDiv.innerHTML = html;
+  
+  if (guiParams.showDebug) {
+    setTimeout(updateDebugDisplay, 100); // Update every 100ms
   }
 }
 
@@ -918,6 +1055,7 @@ function init() {
       chaserSpeed: 0.85, // Slightly faster than fugitives for chase dynamics
       gameDuration: 90, // Game duration in seconds
       playerInitials: "ABC", // 3-letter initials
+      showDebug: false, // Show debug information
       view3D: true, // Toggle for 3D view
       camera3D: "Orthographic", // Camera type for 3D view
       cameraZoom: 1.2, // Camera zoom level (0.5 to 2.0)
