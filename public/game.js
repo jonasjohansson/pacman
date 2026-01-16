@@ -398,6 +398,14 @@ function handleServerMessage(data) {
     case "gameReset":
       // Game was reset - clear caught state and player selection
       gameStarted = false;
+      // Reset speed settings to defaults
+      guiParams.fugitiveSpeed = 0.4;
+      guiParams.chaserSpeed = 0.41;
+      // Update GUI controllers if they exist
+      if (window.fugitiveSpeedController) window.fugitiveSpeedController.setValue(0.4);
+      if (window.chaserSpeedController) window.chaserSpeedController.setValue(0.41);
+      // Send reset speed config to server
+      sendSpeedConfig(0.4, 0.41, guiParams.survivalTimeThreshold, guiParams.chaserSpeedIncreasePerRound);
       // Clear our character selection (players lose selection when game resets)
       myCharacterType = null;
       myColorIndex = null;
@@ -1205,19 +1213,21 @@ function init() {
       });
 
     // Global speed controls
-    charactersFolder
+    const fugitiveSpeedCtrl = charactersFolder
       .add(guiParams, "fugitiveSpeed", 0.2, 3, 0.01)
       .name("Fugitive Speed")
       .onChange((value) => {
         sendSpeedConfig(value, guiParams.chaserSpeed, guiParams.survivalTimeThreshold, guiParams.chaserSpeedIncreasePerRound);
       });
+    window.fugitiveSpeedController = fugitiveSpeedCtrl;
 
-    charactersFolder
+    const chaserSpeedCtrl = charactersFolder
       .add(guiParams, "chaserSpeed", 0.2, 3, 0.01)
       .name("Chaser Speed")
       .onChange((value) => {
         sendSpeedConfig(guiParams.fugitiveSpeed, value, guiParams.survivalTimeThreshold, guiParams.chaserSpeedIncreasePerRound);
       });
+    window.chaserSpeedController = chaserSpeedCtrl;
 
     // Survival time threshold control
     charactersFolder

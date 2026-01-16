@@ -524,6 +524,10 @@ function resetGame() {
   gameState.gameStartTime = null;
   gameState.caughtFugitives.clear();
   
+  // Reset speed settings to defaults
+  gameState.fugitiveSpeed = 0.4;
+  gameState.chaserSpeed = 0.41;
+  
   // Clear all player selections - players lose their chaser selection when game resets
   // Free up all chaser slots
   gameState.availableColors.chaser = [0, 1, 2, 3];
