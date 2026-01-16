@@ -126,6 +126,9 @@ let ws = null;
 let myPlayerId = null;
 let myCharacterType = null; // 'pacman' or 'ghost'
 let myColorIndex = null;
+// Expose to window for 3D rendering to access
+window.myCharacterType = myCharacterType;
+window.myColorIndex = myColorIndex;
 let connectedPlayers = new Map(); // Map of playerId -> { type, colorIndex }
 let multiplayerMode = false;
 let lastPositionUpdate = 0;
@@ -230,6 +233,8 @@ function switchServer(useLocal) {
   myPlayerId = null;
   myCharacterType = null;
   myColorIndex = null;
+  window.myCharacterType = null;
+  window.myColorIndex = null;
   connectedPlayers.clear();
   multiplayerMode = false;
 
@@ -272,11 +277,22 @@ function handleServerMessage(data) {
       // Otherwise, accept the server as source of truth and update our local identity
       myCharacterType = newType;
       myColorIndex = newColorIndex;
+      // Update window variables for 3D rendering
+      window.myCharacterType = myCharacterType;
+      window.myColorIndex = myColorIndex;
 
       // Auto-select the character we joined as so the GUI and local selection match the server
       // All chasers are white, so use white for selection
       if (myCharacterType === "chaser" || myCharacterType === "ghost") {
         selectCharacter("ghost", "white");
+        // Immediately update opacity to 100% for the chaser we joined
+        if (ghosts[newColorIndex] && ghosts[newColorIndex].element) {
+          ghosts[newColorIndex].element.style.opacity = "1";
+        }
+        // Also update 3D opacity if 3D view is enabled
+        if (view3D && window.render3D && window.render3D.updateChaserOpacity) {
+          window.render3D.updateChaserOpacity(newColorIndex, 1.0);
+        }
       }
       // Game starts when "Start game cycle" button is pressed (handled by server)
       break;
@@ -355,6 +371,8 @@ function handleServerMessage(data) {
       // Clear our character selection (we've been kicked out)
       myCharacterType = null;
       myColorIndex = null;
+      window.myCharacterType = null;
+      window.myColorIndex = null;
       // Clear visual selection
       [...pacmen, ...ghosts].forEach((char) => {
         if (char?.element) char.element.classList.remove("selected");
@@ -383,12 +401,26 @@ function handleServerMessage(data) {
       // Clear our character selection (players lose selection when game resets)
       myCharacterType = null;
       myColorIndex = null;
+      window.myCharacterType = null;
+      window.myColorIndex = null;
       // Clear visual selection
       [...pacmen, ...ghosts].forEach((char) => {
         if (char?.element) char.element.classList.remove("selected");
       });
       currentPacman = null;
       currentGhost = null;
+      // Reset all chaser opacities to 20% (not player-controlled)
+      ghosts.forEach((ghost) => {
+        if (ghost && ghost.element) {
+          ghost.element.style.opacity = "0.2";
+        }
+      });
+      // Also update 3D opacities
+      if (view3D && window.render3D && window.render3D.updateChaserOpacity) {
+        for (let i = 0; i < 4; i++) {
+          window.render3D.updateChaserOpacity(i, 0.2);
+        }
+      }
       break;
   }
 }
@@ -499,9 +531,12 @@ function applyServerPositions(positions) {
         if (pos.y !== undefined) ghosts[index].y = pos.y;
         
         // Update opacity based on player control (20% if not controlled, 100% if controlled)
+        // Check both server flag and local player identity
         if (ghosts[index].element) {
           const isPlayerControlled = pos.isPlayerControlled === true;
-          ghosts[index].element.style.opacity = isPlayerControlled ? "1" : "0.2";
+          const isMyChaser = (myCharacterType === "chaser" || myCharacterType === "ghost") && myColorIndex === index;
+          const shouldBeFullOpacity = isPlayerControlled || isMyChaser;
+          ghosts[index].element.style.opacity = shouldBeFullOpacity ? "1" : "0.2";
         }
 
         // Do not update DOM here; renderLoop will interpolate and render
@@ -529,9 +564,12 @@ function applyServerPositions(positions) {
         if (pos.y !== undefined) ghosts[index].y = pos.y;
         
         // Update opacity based on player control (20% if not controlled, 100% if controlled)
+        // Check both server flag and local player identity
         if (ghosts[index].element) {
           const isPlayerControlled = pos.isPlayerControlled === true;
-          ghosts[index].element.style.opacity = isPlayerControlled ? "1" : "0.2";
+          const isMyChaser = (myCharacterType === "chaser" || myCharacterType === "ghost") && myColorIndex === index;
+          const shouldBeFullOpacity = isPlayerControlled || isMyChaser;
+          ghosts[index].element.style.opacity = shouldBeFullOpacity ? "1" : "0.2";
         }
       }
     });
@@ -564,13 +602,21 @@ function applyServerPositions(positions) {
         positionHistory: [],
       };
       updateCharacterAppearance(ghosts[i]);
-      // Set initial opacity to 20% (not player-controlled)
+      // Set initial opacity - check if this is the player's chaser
       if (ghosts[i].element) {
-        ghosts[i].element.style.opacity = "0.2";
+        const isMyChaser = (myCharacterType === "chaser" || myCharacterType === "ghost") && myColorIndex === i;
+        ghosts[i].element.style.opacity = isMyChaser ? "1" : "0.2";
       }
     } else if (!activeChaserIndices.has(i) && ghosts[i].element) {
-      // Chaser exists but not in active list - set to 20% opacity
-      ghosts[i].element.style.opacity = "0.2";
+      // Chaser exists but not in active list - check if it's the player's chaser
+      const isMyChaser = (myCharacterType === "chaser" || myCharacterType === "ghost") && myColorIndex === i;
+      ghosts[i].element.style.opacity = isMyChaser ? "1" : "0.2";
+    } else if (ghosts[i].element) {
+      // Chaser is in active list - ensure opacity is correct (double-check it's not the player's chaser)
+      const isMyChaser = (myCharacterType === "chaser" || myCharacterType === "ghost") && myColorIndex === i;
+      if (isMyChaser) {
+        ghosts[i].element.style.opacity = "1";
+      }
     }
   }
 }
@@ -817,7 +863,7 @@ function init() {
       serverTarget: "Render",
       difficulty: 0.8,
       fugitiveSpeed: 0.4,
-      chaserSpeed: 0.4,
+      chaserSpeed: 0.4, // Same speed as fugitives for balanced gameplay
       playerInitials: "ABC", // 3-letter initials
       survivalTimeThreshold: 10, // Seconds required to survive a round (default 10)
       chaserSpeedIncreasePerRound: 0.01, // Chaser speed increase per round (1% = 0.01)

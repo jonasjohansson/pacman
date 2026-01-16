@@ -295,8 +295,9 @@ function createFugitive3D(color, x, y, px, py) {
   group.add(fugitive);
 
   // Create a point light as a child of the character group
+  // Position light at the bottom to avoid shadow halo effect
   const pointLight = new THREE.PointLight(colorHex, 100, 200);
-  pointLight.position.set(0, CHARACTER_SIZE / 2 + 2, 0); // Position relative to group, closer to character
+  pointLight.position.set(0, -CHARACTER_SIZE / 2 - 2, 0); // Position at bottom of character to avoid shadow halo
   pointLight.castShadow = false; // Don't cast shadows from avatars
   pointLight.intensity = 100; // Default intensity
   pointLight.distance = 200; // Long range
@@ -346,8 +347,9 @@ function createChaser3D(color, x, y, px, py) {
   group.add(chaser);
 
   // Create a point light as a child of the character group (white light)
+  // Position light at the bottom to avoid shadow halo effect
   const pointLight = new THREE.PointLight(colorHex, 100, 200);
-  pointLight.position.set(0, CHARACTER_SIZE / 2 + 2, 0); // Position relative to group, closer to character
+  pointLight.position.set(0, -CHARACTER_SIZE / 2 - 2, 0); // Position at bottom of character to avoid shadow halo
   pointLight.castShadow = false; // Don't cast shadows from avatars
   pointLight.intensity = 100; // Default intensity
   pointLight.distance = 200; // Long range
@@ -467,11 +469,18 @@ function updatePositions3D(positions) {
     }
 
     // Update opacity based on player control (20% if not controlled, 100% if controlled)
+    // Check both server flag and local player identity (need to access myCharacterType and myColorIndex from game.js)
     const isPlayerControlled = pos.isPlayerControlled === true;
+    // Get local player info from window (set by game.js)
+    const isMyChaser =
+      window.myCharacterType &&
+      (window.myCharacterType === "chaser" || window.myCharacterType === "ghost") &&
+      window.myColorIndex === index;
+    const shouldBeFullOpacity = isPlayerControlled || isMyChaser;
     if (chasers3D[index] && chasers3D[index].mesh) {
       chasers3D[index].mesh.traverse((child) => {
         if (child instanceof THREE.Mesh && child.material) {
-          child.material.opacity = isPlayerControlled ? 1.0 : 0.2;
+          child.material.opacity = shouldBeFullOpacity ? 1.0 : 0.2;
           child.material.transparent = true;
         }
       });
@@ -479,7 +488,7 @@ function updatePositions3D(positions) {
       if (chasers3D[index].mesh.children) {
         chasers3D[index].mesh.children.forEach((child) => {
           if (child instanceof THREE.PointLight) {
-            child.intensity = isPlayerControlled ? 100 : 20; // 20% of light intensity when not controlled
+            child.intensity = shouldBeFullOpacity ? 100 : 20; // 20% of light intensity when not controlled
           }
         });
       }
@@ -794,6 +803,24 @@ function setColorOverride(colorIndex, colorHex) {
 window.render3D = {
   init: init3D,
   updatePositions: updatePositions3D,
+  updateChaserOpacity: (chaserIndex, opacity) => {
+    if (chasers3D[chaserIndex] && chasers3D[chaserIndex].mesh) {
+      chasers3D[chaserIndex].mesh.traverse((child) => {
+        if (child instanceof THREE.Mesh && child.material) {
+          child.material.opacity = opacity;
+          child.material.transparent = true;
+        }
+      });
+      // Also update point light intensity based on opacity
+      if (chasers3D[chaserIndex].mesh.children) {
+        chasers3D[chaserIndex].mesh.children.forEach((child) => {
+          if (child instanceof THREE.PointLight) {
+            child.intensity = opacity === 1.0 ? 100 : 20;
+          }
+        });
+      }
+    }
+  },
   updateItems: updateItems3D,
   render: render3D,
   cleanup: cleanup3D,

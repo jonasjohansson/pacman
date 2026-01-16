@@ -78,7 +78,7 @@ const gameState = {
   aiDifficulty: 0.8,
   // Global speed multipliers for all fugitives and all chasers
   fugitiveSpeed: 0.4,
-  chaserSpeed: 0.6, // Constant speed for all chasers (does not increase)
+  chaserSpeed: 0.4, // Same speed as fugitives for balanced gameplay
   survivalTimeThreshold: 10, // Not used in new game mode
   chaserSpeedIncreasePerRound: 0.01, // Not used in new game mode - chaser speed remains constant
   itemsEnabled: false, // Toggle for yellow dots/items
@@ -1101,14 +1101,18 @@ function handleDisconnect(playerId) {
     );
     const isLastChaser = chaserPlayers.length === 1 && (player.type === "chaser" || player.type === "ghost");
     
+    // Check if there's only 1 player total (before removing this one)
+    const totalPlayers = Array.from(gameState.players.values()).filter((p) => p.connected);
+    const isOnlyPlayer = totalPlayers.length === 1;
+    
     // Free up the chaser slot
     if (player.type === "chaser") {
       if (!gameState.availableColors.chaser.includes(player.colorIndex)) {
         gameState.availableColors.chaser.push(player.colorIndex);
         gameState.availableColors.chaser.sort();
       }
-      // Remove the chaser object (it should disappear when not selected)
-      gameState.chasers[player.colorIndex] = null;
+      // Don't remove the chaser object - it should remain visible at 20% opacity
+      // gameState.chasers[player.colorIndex] = null;
     } else {
       // For other types, use the old logic
       gameState.availableColors[player.type].push(player.colorIndex);
@@ -1117,8 +1121,8 @@ function handleDisconnect(playerId) {
     gameState.players.delete(playerId);
     broadcast({ type: "playerLeft", playerId: playerId });
     
-    // If this was the last chaser and the game is running, reset the game
-    if (isLastChaser && gameState.gameStarted) {
+    // If this was the only player or the last chaser, reset the game
+    if ((isOnlyPlayer || isLastChaser) && gameState.gameStarted) {
       resetGame();
     } else {
       broadcastGameState();
