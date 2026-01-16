@@ -998,33 +998,9 @@ function handleJoin(ws, playerId, data) {
     playerName: playerName, // 3-letter initials
   });
 
-  // Create chaser if it doesn't exist (for all chasers 0, 1, 2, 3)
-  if (isChaser && !gameState.chasers[colorIndex]) {
-    const spawnPos = chaserSpawnPositions[colorIndex];
-    if (spawnPos) {
-      gameState.chasers[colorIndex] = {
-        x: spawnPos.x,
-        y: spawnPos.y,
-        px: spawnPos.x * CELL_SIZE + CHARACTER_OFFSET,
-        py: spawnPos.y * CELL_SIZE + CHARACTER_OFFSET,
-        targetX: spawnPos.x,
-        targetY: spawnPos.y,
-        color: "white",
-        speed: 1.0,
-        spawnPos: { ...spawnPos },
-        moveTimer: 0,
-        lastDirX: 0,
-        lastDirY: 0,
-        positionHistory: [],
-        dirX: 0,
-        dirY: 0,
-        nextDirX: 0,
-        nextDirY: 0,
-      };
-      respawnChaser(gameState.chasers[colorIndex], spawnPos);
-    }
-  } else if (isChaser && gameState.chasers[colorIndex]) {
-    // Chaser already exists, just respawn it
+  // Chaser already exists (all chasers are initialized at game start)
+  // Just respawn it to spawn position when player joins
+  if (isChaser && gameState.chasers[colorIndex]) {
     const chaser = gameState.chasers[colorIndex];
     respawnChaser(chaser, chaser.spawnPos);
     chaser.positionHistory = [];
@@ -1244,9 +1220,14 @@ function sendGameState(ws) {
           })
           .filter((p) => p !== null),
         ghosts: gameState.chasers
-          .map((g) => {
+          .map((g, index) => {
             if (!g) return null; // Don't send chasers that don't exist yet
+            // Check if this chaser is player-controlled
+            const isPlayerControlled = Array.from(gameState.players.values()).some(
+              (p) => (p.type === "chaser" || p.type === "ghost") && p.colorIndex === index && p.connected
+            );
             return {
+              index: index,
               x: g.x,
               y: g.y,
               px: g.px,
@@ -1254,6 +1235,7 @@ function sendGameState(ws) {
               targetX: g.targetX,
               targetY: g.targetY,
               color: g.color,
+              isPlayerControlled: isPlayerControlled, // Indicate if player-controlled for opacity
             };
           })
           .filter((g) => g !== null),
@@ -1340,9 +1322,14 @@ function broadcastGameState() {
         })
         .filter((p) => p !== null),
       ghosts: gameState.chasers
-        .map((g) => {
+        .map((g, index) => {
           if (!g) return null; // Don't send chasers that don't exist yet
+          // Check if this chaser is player-controlled
+          const isPlayerControlled = Array.from(gameState.players.values()).some(
+            (p) => (p.type === "chaser" || p.type === "ghost") && p.colorIndex === index && p.connected
+          );
           return {
+            index: index,
             x: g.x,
             y: g.y,
             px: g.px,
@@ -1350,6 +1337,7 @@ function broadcastGameState() {
             targetX: g.targetX,
             targetY: g.targetY,
             color: g.color,
+            isPlayerControlled: isPlayerControlled, // Indicate if player-controlled for opacity
           };
         })
         .filter((g) => g !== null),

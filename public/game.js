@@ -478,10 +478,14 @@ function applyServerPositions(positions) {
     }
   });
 
+  // Track which chaser indices are currently active
+  const activeChaserIndices = new Set();
+  
   if (positions.ghosts && Array.isArray(positions.ghosts)) {
     for (let index = 0; index < positions.ghosts.length; index++) {
       const pos = positions.ghosts[index];
       if (ghosts[index] && pos) {
+        activeChaserIndices.add(index);
         // Always update pixel positions directly from server (no interpolation for server updates)
         if (pos.px !== undefined) ghosts[index].px = pos.px;
         if (pos.py !== undefined) ghosts[index].py = pos.py;
@@ -493,10 +497,80 @@ function applyServerPositions(positions) {
         // Update grid positions
         if (pos.x !== undefined) ghosts[index].x = pos.x;
         if (pos.y !== undefined) ghosts[index].y = pos.y;
+        
+        // Update opacity based on player control (20% if not controlled, 100% if controlled)
+        if (ghosts[index].element) {
+          const isPlayerControlled = pos.isPlayerControlled === true;
+          ghosts[index].element.style.opacity = isPlayerControlled ? "1" : "0.2";
+        }
 
         // Do not update DOM here; renderLoop will interpolate and render
         // This avoids fighting between server updates and client-side smoothing
       }
+    }
+  }
+  
+  // Also check the new "chasers" array name
+  if (positions.chasers && Array.isArray(positions.chasers)) {
+    positions.chasers.forEach((pos) => {
+      const index = pos.index !== undefined ? pos.index : positions.chasers.indexOf(pos);
+      if (ghosts[index] && pos) {
+        activeChaserIndices.add(index);
+        // Always update pixel positions directly from server
+        if (pos.px !== undefined) ghosts[index].px = pos.px;
+        if (pos.py !== undefined) ghosts[index].py = pos.py;
+
+        // Update target positions
+        if (pos.targetX !== undefined) ghosts[index].targetX = pos.targetX;
+        if (pos.targetY !== undefined) ghosts[index].targetY = pos.targetY;
+
+        // Update grid positions
+        if (pos.x !== undefined) ghosts[index].x = pos.x;
+        if (pos.y !== undefined) ghosts[index].y = pos.y;
+        
+        // Update opacity based on player control (20% if not controlled, 100% if controlled)
+        if (ghosts[index].element) {
+          const isPlayerControlled = pos.isPlayerControlled === true;
+          ghosts[index].element.style.opacity = isPlayerControlled ? "1" : "0.2";
+        }
+      }
+    });
+  }
+  
+  // Ensure all chasers are visible (create missing ones if needed)
+  for (let i = 0; i < 4; i++) {
+    if (!ghosts[i]) {
+      // Create ghost element if it doesn't exist
+      const spawnPos = ghostSpawnPositions[i] || { x: 11 + i, y: 11 };
+      const px = spawnPos.x * CELL_SIZE + CHARACTER_OFFSET;
+      const py = spawnPos.y * CELL_SIZE + CHARACTER_OFFSET;
+      ghosts[i] = {
+        x: spawnPos.x,
+        y: spawnPos.y,
+        px,
+        py,
+        targetX: spawnPos.x,
+        targetY: spawnPos.y,
+        color: "white",
+        speed: 1.0,
+        spawnPos: { ...spawnPos },
+        element: createCharacter("ghost", "white", spawnPos.x, spawnPos.y),
+        dirX: 0,
+        dirY: 0,
+        nextDirX: 0,
+        nextDirY: 0,
+        lastDirX: 0,
+        lastDirY: 0,
+        positionHistory: [],
+      };
+      updateCharacterAppearance(ghosts[i]);
+      // Set initial opacity to 20% (not player-controlled)
+      if (ghosts[i].element) {
+        ghosts[i].element.style.opacity = "0.2";
+      }
+    } else if (!activeChaserIndices.has(i) && ghosts[i].element) {
+      // Chaser exists but not in active list - set to 20% opacity
+      ghosts[i].element.style.opacity = "0.2";
     }
   }
 }
