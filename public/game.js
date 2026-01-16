@@ -685,10 +685,10 @@ function sendInput(input) {
   
   const now = Date.now();
   
-  // Only throttle if it's the SAME direction (prevent key-hold spam)
-  // Always send direction changes immediately for responsive controls
-  if (input.dir === lastInputDir && now - lastInputTime < INPUT_THROTTLE) {
-    return; // Ignore rapid duplicate inputs
+  // Send all direction changes immediately (no throttling for my character)
+  // Only throttle if it's the exact same direction sent very recently
+  if (input.dir === lastInputDir && now - lastInputTime < 100) {
+    return; // Ignore very rapid duplicate inputs (less than 100ms)
   }
   
   lastInputDir = input.dir;
@@ -699,9 +699,6 @@ function sendInput(input) {
   if (guiParams.showDebug) {
     console.log(`[INPUT] Sent ${input.dir} at ${now}`);
   }
-  
-  // Note: Client-side prediction disabled - server is authoritative
-  // The server will process the input and send back the updated position
   
   ws.send(JSON.stringify({ type: "input", input: input }));
 }
@@ -1739,19 +1736,15 @@ function init() {
       return;
     }
 
-    // 2D rendering
-    // Smoothing factors (higher = less lag, more responsive)
-    const OTHER_SMOOTHING = 0.5; // Increased from 0.25 for snappier movement
-    // My own character uses instant updates (client-side prediction)
-    const MY_SMOOTHING = 1.0; // Instant for my character (with prediction)
+    // 2D rendering with client-side prediction for my character
+    const OTHER_SMOOTHING = 0.5; // Smooth interpolation for other players
     const SNAP_DISTANCE = 40; // pixels – snap if too far to avoid long slides
+    const CLIENT_MOVE_SPEED = 0.08; // Local movement speed per frame (adjust for smoothness)
 
     pacmen.forEach((pacman, index) => {
       if (!pacman || !pacman.element) return;
 
       const isMine = myCharacterType === "pacman" && myColorIndex === index;
-      // Use slightly higher smoothing for others; my own character follows the server a bit more tightly
-      const smoothing = isMine ? MY_SMOOTHING : OTHER_SMOOTHING;
 
       if (pacman.renderX === undefined) {
         pacman.renderX = pacman.px;
@@ -1764,8 +1757,8 @@ function init() {
           pacman.renderX = pacman.px;
           pacman.renderY = pacman.py;
         } else {
-          pacman.renderX += dx * smoothing;
-          pacman.renderY += dy * smoothing;
+          pacman.renderX += dx * OTHER_SMOOTHING;
+          pacman.renderY += dy * OTHER_SMOOTHING;
         }
       }
 
@@ -1776,12 +1769,43 @@ function init() {
       if (!ghost || !ghost.element) return;
 
       const isMine = (myCharacterType === "ghost" || myCharacterType === "chaser") && myColorIndex === index;
-      const smoothing = isMine ? MY_SMOOTHING : OTHER_SMOOTHING;
 
       if (ghost.renderX === undefined) {
         ghost.renderX = ghost.px;
         ghost.renderY = ghost.py;
+      }
+
+      // For MY character: move smoothly toward target, server corrections blend in
+      // For OTHER characters: interpolate toward server position
+      if (isMine) {
+        // Move toward target position based on current direction
+        const targetPixel = getTargetPixelPos(ghost.targetX, ghost.targetY);
+        const toTargetX = targetPixel.x - ghost.renderX;
+        const toTargetY = targetPixel.y - ghost.renderY;
+        const distToTarget = Math.sqrt(toTargetX * toTargetX + toTargetY * toTargetY);
+        
+        if (distToTarget > 1) {
+          // Move toward target
+          ghost.renderX += (toTargetX / distToTarget) * CLIENT_MOVE_SPEED * CELL_SIZE;
+          ghost.renderY += (toTargetY / distToTarget) * CLIENT_MOVE_SPEED * CELL_SIZE;
+        }
+        
+        // Blend with server position (gentle correction)
+        const toServerX = ghost.px - ghost.renderX;
+        const toServerY = ghost.py - ghost.renderY;
+        const distToServer = Math.sqrt(toServerX * toServerX + toServerY * toServerY);
+        
+        if (distToServer > SNAP_DISTANCE) {
+          // Too far from server, snap to it
+          ghost.renderX = ghost.px;
+          ghost.renderY = ghost.py;
+        } else if (distToServer > 2) {
+          // Gentle correction toward server position (10% blend)
+          ghost.renderX += toServerX * 0.1;
+          ghost.renderY += toServerY * 0.1;
+        }
       } else {
+        // Other players: interpolate toward server position
         const dx = ghost.px - ghost.renderX;
         const dy = ghost.py - ghost.renderY;
         const dist = Math.sqrt(dx * dx + dy * dy);
@@ -1789,8 +1813,8 @@ function init() {
           ghost.renderX = ghost.px;
           ghost.renderY = ghost.py;
         } else {
-          ghost.renderX += dx * smoothing;
-          ghost.renderY += dy * smoothing;
+          ghost.renderX += dx * OTHER_SMOOTHING;
+          ghost.renderY += dy * OTHER_SMOOTHING;
         }
       }
 

@@ -788,20 +788,19 @@ function gameLoop() {
         const desiredX = chaser.x + chaser.nextDirX;
         const desiredY = chaser.y + chaser.nextDirY;
         if (desiredX >= 0 && desiredX < COLS && desiredY >= 0 && desiredY < ROWS && isPath(desiredX, desiredY)) {
+          // Direction is valid - apply it
           chaser.dirX = chaser.nextDirX;
           chaser.dirY = chaser.nextDirY;
           chaser.targetX = desiredX;
           chaser.targetY = desiredY;
           chaser.lastDirX = chaser.dirX;
           chaser.lastDirY = chaser.dirY;
-          // Clear the queued direction after using it
+          // Clear the queued direction after successfully using it
           chaser.nextDirX = 0;
           chaser.nextDirY = 0;
         } else {
-          // Invalid direction, clear it but continue in current direction
-          chaser.nextDirX = 0;
-          chaser.nextDirY = 0;
-          // Continue in current direction if possible
+          // Direction not valid yet - KEEP IT QUEUED, continue in current direction
+          // Don't clear nextDirX/nextDirY - it will be tried again at the next tile center
           if (chaser.dirX !== 0 || chaser.dirY !== 0) {
             const continueX = chaser.x + chaser.dirX;
             const continueY = chaser.y + chaser.dirY;
@@ -809,9 +808,19 @@ function gameLoop() {
               chaser.targetX = continueX;
               chaser.targetY = continueY;
             } else {
-              // Can't continue, stop
-              chaser.dirX = 0;
-              chaser.dirY = 0;
+              // Can't continue in current direction, try the queued direction as last resort
+              if (desiredX >= 0 && desiredX < COLS && desiredY >= 0 && desiredY < ROWS && isPath(desiredX, desiredY)) {
+                chaser.dirX = chaser.nextDirX;
+                chaser.dirY = chaser.nextDirY;
+                chaser.targetX = desiredX;
+                chaser.targetY = desiredY;
+                chaser.nextDirX = 0;
+                chaser.nextDirY = 0;
+              } else {
+                // Can't move in either direction, stop
+                chaser.dirX = 0;
+                chaser.dirY = 0;
+              }
             }
           }
         }
