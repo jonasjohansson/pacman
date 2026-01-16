@@ -399,13 +399,13 @@ function handleServerMessage(data) {
       // Game was reset - clear caught state and player selection
       gameStarted = false;
       // Reset speed settings to defaults
-      guiParams.fugitiveSpeed = 0.45;
-      guiParams.chaserSpeed = 0.47;
+      guiParams.fugitiveSpeed = 0.8;
+      guiParams.chaserSpeed = 0.85;
       // Update GUI controllers if they exist
-      if (window.fugitiveSpeedController) window.fugitiveSpeedController.setValue(0.45);
-      if (window.chaserSpeedController) window.chaserSpeedController.setValue(0.47);
+      if (window.fugitiveSpeedController) window.fugitiveSpeedController.setValue(0.8);
+      if (window.chaserSpeedController) window.chaserSpeedController.setValue(0.85);
       // Send reset speed config to server
-      sendSpeedConfig(0.45, 0.47);
+      sendSpeedConfig(0.8, 0.85);
       // Clear our character selection (players lose selection when game resets)
       myCharacterType = null;
       myColorIndex = null;
@@ -660,20 +660,45 @@ function sendGameDuration(duration) {
 // Send input to server (optimized - minimal payload)
 let lastInputDir = null;
 let lastInputTime = 0;
-const INPUT_THROTTLE = 16; // ms - one frame at 60fps (reduced from 50ms to allow quick direction changes)
+const INPUT_THROTTLE = 30; // ms - throttle duplicate direction spam
+
+// Direction vectors for client-side prediction
+const DIR_VECTORS = {
+  up: { x: 0, y: -1 },
+  down: { x: 0, y: 1 },
+  left: { x: -1, y: 0 },
+  right: { x: 1, y: 0 },
+};
 
 function sendInput(input) {
   if (!ws || ws.readyState !== WebSocket.OPEN || !myPlayerId) return;
   
-  // Throttle rapid duplicate inputs (prevent network spam)
-  // Only throttle if it's the SAME direction to allow quick direction changes
   const now = Date.now();
+  
+  // Only throttle if it's the SAME direction (prevent key-hold spam)
+  // Always send direction changes immediately for responsive controls
   if (input.dir === lastInputDir && now - lastInputTime < INPUT_THROTTLE) {
-    return;
+    return; // Ignore rapid duplicate inputs
   }
   
   lastInputDir = input.dir;
   lastInputTime = now;
+  
+  // CLIENT-SIDE PREDICTION: Immediately update local character for instant response
+  if ((myCharacterType === "chaser" || myCharacterType === "ghost") && myColorIndex !== null) {
+    const myChaser = ghosts[myColorIndex];
+    if (myChaser && input.dir && DIR_VECTORS[input.dir]) {
+      const dir = DIR_VECTORS[input.dir];
+      const newTargetX = myChaser.x + dir.x;
+      const newTargetY = myChaser.y + dir.y;
+      
+      // Only predict if the move is valid (basic validation)
+      if (newTargetX >= 0 && newTargetX < COLS && newTargetY >= 0 && newTargetY < ROWS && isPath(newTargetX, newTargetY)) {
+        myChaser.targetX = newTargetX;
+        myChaser.targetY = newTargetY;
+      }
+    }
+  }
   
   ws.send(JSON.stringify({ type: "input", input: input }));
 }
@@ -889,8 +914,8 @@ function init() {
     window.guiParams = {
       serverTarget: "Render",
       difficulty: 0.8,
-      fugitiveSpeed: 0.45, // Increased from 0.4 for faster gameplay
-      chaserSpeed: 0.47, // Increased from 0.41, slightly faster than fugitives
+      fugitiveSpeed: 0.8, // Fast-paced gameplay
+      chaserSpeed: 0.85, // Slightly faster than fugitives for chase dynamics
       gameDuration: 90, // Game duration in seconds
       playerInitials: "ABC", // 3-letter initials
       view3D: true, // Toggle for 3D view
@@ -1579,8 +1604,8 @@ function init() {
     // 2D rendering
     // Smoothing factors (higher = less lag, more responsive)
     const OTHER_SMOOTHING = 0.5; // Increased from 0.25 for snappier movement
-    // My own character follows the server almost exactly to minimize input latency
-    const MY_SMOOTHING = 1.0;
+    // My own character uses instant updates (client-side prediction)
+    const MY_SMOOTHING = 1.0; // Instant for my character (with prediction)
     const SNAP_DISTANCE = 40; // pixels – snap if too far to avoid long slides
 
     pacmen.forEach((pacman, index) => {
@@ -1612,7 +1637,7 @@ function init() {
     ghosts.forEach((ghost, index) => {
       if (!ghost || !ghost.element) return;
 
-      const isMine = myCharacterType === "ghost" && myColorIndex === index;
+      const isMine = (myCharacterType === "ghost" || myCharacterType === "chaser") && myColorIndex === index;
       const smoothing = isMine ? MY_SMOOTHING : OTHER_SMOOTHING;
 
       if (ghost.renderX === undefined) {

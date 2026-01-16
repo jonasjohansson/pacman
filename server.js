@@ -84,8 +84,8 @@ const gameState = {
   gameDuration: 90, // Game lasts 90 seconds
   aiDifficulty: 0.8,
   // Global speed multipliers for all fugitives and all chasers
-  fugitiveSpeed: 0.45, // Increased from 0.4 for faster gameplay
-  chaserSpeed: 0.47, // Increased from 0.41, slightly faster than fugitives
+  fugitiveSpeed: 0.8, // Fast-paced gameplay
+  chaserSpeed: 0.85, // Slightly faster than fugitives for chase dynamics
   itemsEnabled: false, // Toggle for yellow dots/items
   fugitives: [],
   chasers: [],
@@ -204,13 +204,30 @@ function isAtTarget(character) {
 
 function moveCharacter(character, speedMultiplier = 1.0) {
   if (!character) return;
+
+  // Validate target is grid-aligned (only one tile away in one direction)
+  const deltaX = character.targetX - character.x;
+  const deltaY = character.targetY - character.y;
+
+  // If both are non-zero, we have a diagonal target (BUG!)
+  if (deltaX !== 0 && deltaY !== 0) {
+    console.error(
+      `DIAGONAL TARGET DETECTED! Current: (${character.x}, ${character.y}), Target: (${character.targetX}, ${character.targetY})`
+    );
+    // Fix by only moving in one direction (prioritize current direction)
+    if (character.dirX !== 0) {
+      character.targetY = character.y; // Keep same row
+    } else {
+      character.targetX = character.x; // Keep same column
+    }
+  }
+
   const target = getTargetPixelPos(character.targetX, character.targetY);
   const dx = target.x - character.px;
   const dy = target.y - character.py;
   const distance = Math.sqrt(dx * dx + dy * dy);
 
-  // Move until we exactly reach the tile center; avoid a "dead zone" where
-  // distance is small but we never snap to the target.
+  // Move until we exactly reach the tile center
   if (distance > 0) {
     const moveDistance = BASE_MOVE_SPEED * CELL_SIZE * speedMultiplier;
     if (distance > moveDistance) {
@@ -445,10 +462,10 @@ function checkCollisions() {
       if (fugitive.x === chaser.x && fugitive.y === chaser.y) {
         // Mark fugitive as caught
         gameState.caughtFugitives.add(fugitiveIndex);
-        
+
         // Calculate time to catch (from game start)
         const catchTime = Date.now() - gameState.gameStartTime;
-        
+
         // Update all chaser players' scores (lower time = better score)
         // Score is based on how fast all fugitives are caught
         gameState.players.forEach((player, playerId) => {
@@ -479,15 +496,15 @@ function checkCollisions() {
 
 function endGame(allCaught) {
   if (!gameState.gameStarted) return;
-  
+
   gameState.gameStarted = false;
   const gameTime = Date.now() - gameState.gameStartTime;
-  
+
   // Calculate final scores for all chaser players
   gameState.players.forEach((player, playerId) => {
     if (player.connected && player.type === "chaser") {
       let finalScore = 0;
-      
+
       if (allCaught) {
         // Score based on how fast all fugitives were caught (lower time = higher score)
         // Formula: 10000 - (total time in seconds * 10)
@@ -502,9 +519,9 @@ function endGame(allCaught) {
         // Score = percentage of fugitives caught * 5000 (max score if all caught but slower)
         finalScore = Math.floor(caughtPercentage * 5000);
       }
-      
+
       player.stats.chaserScore = finalScore;
-      
+
       // Send game end message
       player.ws.send(
         JSON.stringify({
@@ -518,7 +535,7 @@ function endGame(allCaught) {
       );
     }
   });
-  
+
   // Reset game state after a short delay to show final scores
   setTimeout(() => {
     resetGame();
@@ -529,21 +546,21 @@ function resetGame() {
   gameState.gameStarted = false;
   gameState.gameStartTime = null;
   gameState.caughtFugitives.clear();
-  
+
   // Reset speed settings to defaults
-  gameState.fugitiveSpeed = 0.45;
-  gameState.chaserSpeed = 0.47;
-  
+  gameState.fugitiveSpeed = 0.8;
+  gameState.chaserSpeed = 0.85;
+
   // Clear all player selections - players lose their chaser selection when game resets
   // Free up all chaser slots
   gameState.availableColors.chaser = [0, 1, 2, 3];
-  
+
   // Remove all chasers (they only exist when players join)
   gameState.chasers[0] = null;
   gameState.chasers[1] = null;
   gameState.chasers[2] = null;
   gameState.chasers[3] = null;
-  
+
   // Disconnect all players from their chasers
   gameState.players.forEach((player, playerId) => {
     if (player.type === "chaser") {
@@ -556,10 +573,10 @@ function resetGame() {
       gameState.players.delete(playerId);
     }
   });
-  
+
   // Reset all characters to spawn positions
   initCharacters();
-  
+
   // Reset all chaser movement states
   gameState.chasers.forEach((chaser, index) => {
     if (chaser) {
@@ -572,7 +589,7 @@ function resetGame() {
       chaser.positionHistory = [];
     }
   });
-  
+
   // Reset all fugitive movement states
   gameState.fugitives.forEach((fugitive) => {
     if (fugitive) {
@@ -585,7 +602,7 @@ function resetGame() {
       fugitive.positionHistory = [];
     }
   });
-  
+
   broadcast({ type: "gameReset" });
   broadcastGameState();
 }
@@ -1111,15 +1128,13 @@ function handleDisconnect(playerId) {
   const player = gameState.players.get(playerId);
   if (player) {
     // Check if this is the last chaser player (before removing them)
-    const chaserPlayers = Array.from(gameState.players.values()).filter(
-      (p) => (p.type === "chaser" || p.type === "ghost") && p.connected
-    );
+    const chaserPlayers = Array.from(gameState.players.values()).filter((p) => (p.type === "chaser" || p.type === "ghost") && p.connected);
     const isLastChaser = chaserPlayers.length === 1 && (player.type === "chaser" || player.type === "ghost");
-    
+
     // Check if there's only 1 player total (before removing this one)
     const totalPlayers = Array.from(gameState.players.values()).filter((p) => p.connected);
     const isOnlyPlayer = totalPlayers.length === 1;
-    
+
     // Free up the chaser slot (handle both "chaser" and "ghost" types)
     if (player.type === "chaser" || player.type === "ghost") {
       if (!gameState.availableColors.chaser.includes(player.colorIndex)) {
@@ -1140,7 +1155,7 @@ function handleDisconnect(playerId) {
     }
     gameState.players.delete(playerId);
     broadcast({ type: "playerLeft", playerId: playerId });
-    
+
     // If this was the only player or the last chaser, reset the game
     if ((isOnlyPlayer || isLastChaser) && gameState.gameStarted) {
       resetGame();
@@ -1153,14 +1168,14 @@ function handleDisconnect(playerId) {
 function broadcast(message) {
   const data = JSON.stringify(message); // Stringify once, reuse for all clients
   const readyClients = [];
-  
+
   // Filter ready clients first to avoid checking state multiple times
   wss.clients.forEach((client) => {
     if (client.readyState === 1) {
       readyClients.push(client);
     }
   });
-  
+
   // Send to all ready clients
   for (let i = 0; i < readyClients.length; i++) {
     readyClients[i].send(data);
