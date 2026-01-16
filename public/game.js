@@ -411,11 +411,15 @@ function applyServerPositions(positions) {
     return;
   }
 
+  // Track which fugitive indices are currently active (not caught)
+  const activeFugitiveIndices = new Set();
+
   // Apply positions from server for ALL characters (server is authoritative)
   if (positions.pacmen && Array.isArray(positions.pacmen)) {
     for (let index = 0; index < positions.pacmen.length; index++) {
       const pos = positions.pacmen[index];
       if (pacmen[index] && pos) {
+        activeFugitiveIndices.add(index);
         // Always update pixel positions directly from server (no interpolation for server updates)
         if (pos.px !== undefined) pacmen[index].px = pos.px;
         if (pos.py !== undefined) pacmen[index].py = pos.py;
@@ -433,6 +437,42 @@ function applyServerPositions(positions) {
       }
     }
   }
+  
+  // Also check the new "fugitives" array name
+  if (positions.fugitives && Array.isArray(positions.fugitives)) {
+    for (let index = 0; index < positions.fugitives.length; index++) {
+      const pos = positions.fugitives[index];
+      if (pacmen[index] && pos) {
+        activeFugitiveIndices.add(index);
+        // Always update pixel positions directly from server (no interpolation for server updates)
+        if (pos.px !== undefined) pacmen[index].px = pos.px;
+        if (pos.py !== undefined) pacmen[index].py = pos.py;
+
+        // Update target positions
+        if (pos.targetX !== undefined) pacmen[index].targetX = pos.targetX;
+        if (pos.targetY !== undefined) pacmen[index].targetY = pos.targetY;
+
+        // Update grid positions
+        if (pos.x !== undefined) pacmen[index].x = pos.x;
+        if (pos.y !== undefined) pacmen[index].y = pos.y;
+      }
+    }
+  }
+  
+  // Remove/hide fugitives that are no longer active (caught and removed from game)
+  pacmen.forEach((fugitive, index) => {
+    if (fugitive && !activeFugitiveIndices.has(index)) {
+      // Hide the fugitive element (it's been caught and removed)
+      if (fugitive.element) {
+        fugitive.element.style.display = "none";
+      }
+    } else if (fugitive && activeFugitiveIndices.has(index)) {
+      // Show the fugitive element if it's active again (after game reset)
+      if (fugitive.element) {
+        fugitive.element.style.display = "";
+      }
+    }
+  });
 
   if (positions.ghosts && Array.isArray(positions.ghosts)) {
     for (let index = 0; index < positions.ghosts.length; index++) {
@@ -1097,6 +1137,10 @@ function init() {
       window.characterControllers.ghost[i] = chaserCtrl;
     }
 
+    // Create Team Settings folder for color and image controls
+    const teamSettingsFolder = gui.addFolder("Team Settings");
+    teamSettingsFolder.close(); // Closed by default
+
     // Color controls for each team (Team 1, Team 2, Team 3, Team 4)
     COLORS.forEach((colorName, colorIndex) => {
       const colorKey = `${colorName}Color`;
@@ -1104,7 +1148,7 @@ function init() {
       const displayName = `Team ${teamNumber} Color`;
 
       const defaultColors = ["#ff0000", "#00ff00", "#0000ff", "#ffff00"];
-      const colorCtrl = charactersFolder
+      const colorCtrl = teamSettingsFolder
         .addColor(guiParams, colorKey)
         .name(displayName)
         .onChange((value) => {
@@ -1144,7 +1188,7 @@ function init() {
 
       // Team image control (for fugitives only)
       const imageKey = `team${teamNumber}Image`;
-      charactersFolder
+      teamSettingsFolder
         .add(guiParams, imageKey)
         .name(`Team ${teamNumber} Image`)
         .onChange((value) => {

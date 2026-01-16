@@ -404,7 +404,15 @@ function getColorHex(colorName) {
 function updatePositions3D(positions) {
   // Update fugitives (server may still use "pacmen" name)
   const fugitivePositions = positions.fugitives || positions.pacmen || [];
-  fugitivePositions.forEach((pos, index) => {
+
+  // Track which fugitive indices are currently active (not caught)
+  const activeFugitiveIndices = new Set();
+
+  fugitivePositions.forEach((pos, arrayIndex) => {
+    // Use index from server if provided, otherwise use array index
+    const index = pos.index !== undefined ? pos.index : arrayIndex;
+    activeFugitiveIndices.add(index);
+
     if (!fugitives3D[index]) {
       // Use pixel coordinates if available for accurate positioning
       fugitives3D[index] = createFugitive3D(pos.color, pos.x, pos.y, pos.px, pos.py);
@@ -418,6 +426,16 @@ function updatePositions3D(positions) {
         fugitives3D[index].mesh.position.x = pos.x * CELL_SIZE + CELL_SIZE / 2;
         fugitives3D[index].mesh.position.z = pos.y * CELL_SIZE + CELL_SIZE / 2;
       }
+    }
+  });
+
+  // Remove fugitives that are no longer active (caught and removed from game)
+  fugitives3D.forEach((fugitive, index) => {
+    if (fugitive && !activeFugitiveIndices.has(index)) {
+      // Remove from scene
+      if (fugitive.mesh) scene.remove(fugitive.mesh);
+      // Clean up
+      fugitives3D[index] = null;
     }
   });
 

@@ -1173,9 +1173,10 @@ function sendGameState(ws) {
       positions: {
         fugitives: gameState.fugitives
           .map((p, index) => {
-            // Don't send caught fugitives
+            // Don't send caught fugitives (they're removed from the game)
             if (gameState.caughtFugitives.has(index)) return null;
             return {
+              index: index, // Include index so client knows which fugitive this is
               x: p.x,
               y: p.y,
               px: p.px,
@@ -1204,9 +1205,10 @@ function sendGameState(ws) {
         // Legacy support
         pacmen: gameState.fugitives
           .map((p, index) => {
-            // Don't send caught fugitives
+            // Don't send caught fugitives (they're removed from the game)
             if (gameState.caughtFugitives.has(index)) return null;
             return {
+              index: index, // Include index so client knows which fugitive this is
               x: p.x,
               y: p.y,
               px: p.px,
@@ -1268,9 +1270,10 @@ function broadcastGameState() {
     positions: {
       fugitives: gameState.fugitives
         .map((p, index) => {
-          // Don't send caught fugitives
+          // Don't send caught fugitives (they're removed from the game)
           if (gameState.caughtFugitives.has(index)) return null;
           return {
+            index: index, // Include index so client knows which fugitive this is
             x: p.x,
             y: p.y,
             px: p.px,
