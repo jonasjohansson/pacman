@@ -295,9 +295,9 @@ function createFugitive3D(color, x, y, px, py) {
   group.add(fugitive);
 
   // Create a point light as a child of the character group
-  // Position light at the bottom to avoid shadow halo effect
+  // Position light at the bottom center of the character to avoid shadow halo effect
   const pointLight = new THREE.PointLight(colorHex, 100, 200);
-  pointLight.position.set(0, -CHARACTER_SIZE / 2 - 2, 0); // Position at bottom of character to avoid shadow halo
+  pointLight.position.set(0, -CHARACTER_SIZE / 4, 0); // Position at bottom half of character to avoid shadow halo
   pointLight.castShadow = false; // Don't cast shadows from avatars
   pointLight.intensity = 100; // Default intensity
   pointLight.distance = 200; // Long range
@@ -347,9 +347,9 @@ function createChaser3D(color, x, y, px, py) {
   group.add(chaser);
 
   // Create a point light as a child of the character group (white light)
-  // Position light at the bottom to avoid shadow halo effect
+  // Position light at the bottom center of the character to avoid shadow halo effect
   const pointLight = new THREE.PointLight(colorHex, 100, 200);
-  pointLight.position.set(0, -CHARACTER_SIZE / 2 - 2, 0); // Position at bottom of character to avoid shadow halo
+  pointLight.position.set(0, -CHARACTER_SIZE / 4, 0); // Position at bottom half of character to avoid shadow halo
   pointLight.castShadow = false; // Don't cast shadows from avatars
   pointLight.intensity = 100; // Default intensity
   pointLight.distance = 200; // Long range
