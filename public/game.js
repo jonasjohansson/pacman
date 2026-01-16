@@ -1610,7 +1610,7 @@ function init() {
   }
 
   // Handle player input - send direction to server
-  // WASD always controls the first chaser (chaser 0)
+  // WASD controls whichever chaser the player is currently controlling
   document.addEventListener("keydown", (e) => {
     keys[e.key] = true;
     
@@ -1626,12 +1626,16 @@ function init() {
       return;
     }
 
-    // WASD always controls the first chaser (chaser 0)
     if (!multiplayerMode || !myPlayerId) return;
     
-    // If not already controlling chaser 0, join it automatically
-    if (myCharacterType !== "chaser" && myCharacterType !== "ghost" || myColorIndex !== 0) {
-      // Auto-join chaser 0 if not already controlling it
+    // If already controlling a chaser (any chaser 0-3), send input for that chaser
+    if ((myCharacterType === "chaser" || myCharacterType === "ghost") && myColorIndex !== null && myColorIndex >= 0 && myColorIndex <= 3) {
+      sendInput({ dir });
+      return;
+    }
+    
+    // If not controlling any chaser, auto-join chaser 0 as default
+    if (myCharacterType !== "chaser" && myCharacterType !== "ghost") {
       joinAsCharacter("chaser", 0, guiParams.playerInitials);
       // Wait a moment for the join to process, then send input
       setTimeout(() => {
@@ -1640,11 +1644,6 @@ function init() {
         }
       }, 50);
       return;
-    }
-    
-    // Already controlling chaser 0, send input normally
-    if (myColorIndex === 0) {
-      sendInput({ dir });
     }
   });
   document.addEventListener("keyup", (e) => {
