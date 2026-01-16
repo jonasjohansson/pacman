@@ -785,7 +785,7 @@ function gameLoop() {
           chaser.nextDirX = 0;
           chaser.nextDirY = 0;
           // Continue in current direction if possible
-          if (chaser.dirX || chaser.dirY) {
+          if (chaser.dirX !== 0 || chaser.dirY !== 0) {
             const continueX = chaser.x + chaser.dirX;
             const continueY = chaser.y + chaser.dirY;
             if (continueX >= 0 && continueX < COLS && continueY >= 0 && continueY < ROWS && isPath(continueX, continueY)) {
@@ -798,7 +798,7 @@ function gameLoop() {
             }
           }
         }
-      } else if (chaser.dirX || chaser.dirY) {
+      } else if (chaser.dirX !== 0 || chaser.dirY !== 0) {
         // No new input, but already moving - continue in current direction
         const continueX = chaser.x + chaser.dirX;
         const continueY = chaser.y + chaser.dirY;
