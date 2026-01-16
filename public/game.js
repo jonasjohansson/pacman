@@ -1207,17 +1207,20 @@ function init() {
     // Global speed controls
     charactersFolder
       .add(guiParams, "fugitiveSpeed", 0.2, 3, 0.1)
-      .name("Fugitive Speed")
+      .name("Character Speed")
       .onChange((value) => {
-        sendSpeedConfig(value, guiParams.chaserSpeed, guiParams.survivalTimeThreshold, guiParams.chaserSpeedIncreasePerRound);
+        // Chaser speed always matches fugitive speed
+        guiParams.chaserSpeed = value;
+        sendSpeedConfig(value, value, guiParams.survivalTimeThreshold, guiParams.chaserSpeedIncreasePerRound);
       });
 
-    charactersFolder
-      .add(guiParams, "chaserSpeed", 0.2, 3, 0.1)
-      .name("Chaser Speed")
-      .onChange((value) => {
-        sendSpeedConfig(guiParams.fugitiveSpeed, value, guiParams.survivalTimeThreshold, guiParams.chaserSpeedIncreasePerRound);
-      });
+    // Chaser speed is always the same as fugitive speed - no separate control
+    // charactersFolder
+    //   .add(guiParams, "chaserSpeed", 0.2, 3, 0.1)
+    //   .name("Chaser Speed")
+    //   .onChange((value) => {
+    //     sendSpeedConfig(guiParams.fugitiveSpeed, value, guiParams.survivalTimeThreshold, guiParams.chaserSpeedIncreasePerRound);
+    //   });
 
     // Survival time threshold control
     charactersFolder

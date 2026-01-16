@@ -1027,14 +1027,19 @@ function handleSetSpeeds(data) {
   // Support both new and legacy names
   if (typeof fugitiveSpeed === "number") {
     gameState.fugitiveSpeed = Math.max(0.2, Math.min(3, fugitiveSpeed));
+    // Chaser speed always matches fugitive speed
+    gameState.chaserSpeed = gameState.fugitiveSpeed;
   } else if (typeof pacmanSpeed === "number") {
     gameState.fugitiveSpeed = Math.max(0.2, Math.min(3, pacmanSpeed));
+    // Chaser speed always matches fugitive speed
+    gameState.chaserSpeed = gameState.fugitiveSpeed;
   }
-  if (typeof chaserSpeed === "number") {
-    gameState.chaserSpeed = Math.max(0.2, Math.min(3, chaserSpeed));
-  } else if (typeof ghostSpeed === "number") {
-    gameState.chaserSpeed = Math.max(0.2, Math.min(3, ghostSpeed));
-  }
+  // Chaser speed is always synced to fugitive speed - ignore separate chaser speed setting
+  // if (typeof chaserSpeed === "number") {
+  //   gameState.chaserSpeed = Math.max(0.2, Math.min(3, chaserSpeed));
+  // } else if (typeof ghostSpeed === "number") {
+  //   gameState.chaserSpeed = Math.max(0.2, Math.min(3, ghostSpeed));
+  // }
   if (typeof survivalTimeThreshold === "number") {
     gameState.survivalTimeThreshold = Math.max(1, Math.min(120, survivalTimeThreshold));
   }
