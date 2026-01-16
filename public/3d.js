@@ -276,14 +276,16 @@ function createFugitive3D(color, x, y, px, py) {
     material = new THREE.MeshStandardMaterial({
       map: texture,
       color: 0xffffff, // Use white to show texture colors properly
-      emissive: 0x000000, // No emissive - rely on lights
+      emissive: colorHex, // Match light color for better blending
+      emissiveIntensity: 0.3, // Subtle glow
       roughness: 0.4,
       metalness: 0.1,
     });
   } else {
     material = new THREE.MeshStandardMaterial({
       color: colorHex,
-      emissive: 0x000000, // No emissive - rely on lights
+      emissive: colorHex, // Match light color for better blending
+      emissiveIntensity: 0.3, // Subtle glow
       roughness: 0.4,
       metalness: 0.1,
     });
@@ -295,9 +297,9 @@ function createFugitive3D(color, x, y, px, py) {
   group.add(fugitive);
 
   // Create a point light as a child of the character group
-  // Position light at the bottom center of the character to avoid shadow halo effect
+  // Position light slightly above the character to avoid being inside the mesh
   const pointLight = new THREE.PointLight(colorHex, 100, 200);
-  pointLight.position.set(0, -CHARACTER_SIZE / 4, 0); // Position at bottom half of character to avoid shadow halo
+  pointLight.position.set(0, CHARACTER_SIZE / 2 + 2, 0); // Position above the character mesh
   pointLight.castShadow = false; // Don't cast shadows from avatars
   pointLight.intensity = 100; // Default intensity
   pointLight.distance = 200; // Long range
@@ -336,7 +338,8 @@ function createChaser3D(color, x, y, px, py) {
   const colorHex = 0xffffff; // White
   const material = new THREE.MeshStandardMaterial({
     color: colorHex,
-    emissive: 0x000000, // No emissive - rely on lights
+    emissive: colorHex, // Match light color for better blending
+    emissiveIntensity: 0.3, // Subtle glow
     roughness: 0.4,
     metalness: 0.1,
   });
@@ -347,9 +350,9 @@ function createChaser3D(color, x, y, px, py) {
   group.add(chaser);
 
   // Create a point light as a child of the character group (white light)
-  // Position light at the bottom center of the character to avoid shadow halo effect
+  // Position light slightly above the character to avoid being inside the mesh
   const pointLight = new THREE.PointLight(colorHex, 100, 200);
-  pointLight.position.set(0, -CHARACTER_SIZE / 4, 0); // Position at bottom half of character to avoid shadow halo
+  pointLight.position.set(0, CHARACTER_SIZE / 2 + 2, 0); // Position above the character mesh
   pointLight.castShadow = false; // Don't cast shadows from avatars
   pointLight.intensity = 100; // Default intensity
   pointLight.distance = 200; // Long range

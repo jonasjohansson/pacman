@@ -863,7 +863,7 @@ function init() {
       serverTarget: "Render",
       difficulty: 0.8,
       fugitiveSpeed: 0.4,
-      chaserSpeed: 0.4, // Same speed as fugitives for balanced gameplay
+      chaserSpeed: 0.41, // Slightly faster than fugitives
       playerInitials: "ABC", // 3-letter initials
       survivalTimeThreshold: 10, // Seconds required to survive a round (default 10)
       chaserSpeedIncreasePerRound: 0.01, // Chaser speed increase per round (1% = 0.01)
@@ -1206,21 +1206,18 @@ function init() {
 
     // Global speed controls
     charactersFolder
-      .add(guiParams, "fugitiveSpeed", 0.2, 3, 0.1)
-      .name("Character Speed")
+      .add(guiParams, "fugitiveSpeed", 0.2, 3, 0.01)
+      .name("Fugitive Speed")
       .onChange((value) => {
-        // Chaser speed always matches fugitive speed
-        guiParams.chaserSpeed = value;
-        sendSpeedConfig(value, value, guiParams.survivalTimeThreshold, guiParams.chaserSpeedIncreasePerRound);
+        sendSpeedConfig(value, guiParams.chaserSpeed, guiParams.survivalTimeThreshold, guiParams.chaserSpeedIncreasePerRound);
       });
 
-    // Chaser speed is always the same as fugitive speed - no separate control
-    // charactersFolder
-    //   .add(guiParams, "chaserSpeed", 0.2, 3, 0.1)
-    //   .name("Chaser Speed")
-    //   .onChange((value) => {
-    //     sendSpeedConfig(guiParams.fugitiveSpeed, value, guiParams.survivalTimeThreshold, guiParams.chaserSpeedIncreasePerRound);
-    //   });
+    charactersFolder
+      .add(guiParams, "chaserSpeed", 0.2, 3, 0.01)
+      .name("Chaser Speed")
+      .onChange((value) => {
+        sendSpeedConfig(guiParams.fugitiveSpeed, value, guiParams.survivalTimeThreshold, guiParams.chaserSpeedIncreasePerRound);
+      });
 
     // Survival time threshold control
     charactersFolder
