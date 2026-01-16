@@ -1537,6 +1537,13 @@ function init() {
     updateCharacterAppearance(ghost);
   });
 
+  // Set initial opacity to 20% for all chasers (they become fully opaque when controlled)
+  ghosts.forEach((ghost) => {
+    if (ghost.element) {
+      ghost.element.style.opacity = "0.2";
+    }
+  });
+
   // (Per-color pair GUI controls and scoring have been removed for now)
 
   // Keyboard controls

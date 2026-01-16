@@ -1109,8 +1109,8 @@ function handleDisconnect(playerId) {
     const totalPlayers = Array.from(gameState.players.values()).filter((p) => p.connected);
     const isOnlyPlayer = totalPlayers.length === 1;
     
-    // Free up the chaser slot
-    if (player.type === "chaser") {
+    // Free up the chaser slot (handle both "chaser" and "ghost" types)
+    if (player.type === "chaser" || player.type === "ghost") {
       if (!gameState.availableColors.chaser.includes(player.colorIndex)) {
         gameState.availableColors.chaser.push(player.colorIndex);
         gameState.availableColors.chaser.sort();
@@ -1119,8 +1119,13 @@ function handleDisconnect(playerId) {
       // gameState.chasers[player.colorIndex] = null;
     } else {
       // For other types, use the old logic
-      gameState.availableColors[player.type].push(player.colorIndex);
-      gameState.availableColors[player.type].sort();
+      const normalizedType = player.type === "fugitive" || player.type === "pacman" ? "fugitive" : player.type;
+      if (gameState.availableColors[normalizedType]) {
+        if (!gameState.availableColors[normalizedType].includes(player.colorIndex)) {
+          gameState.availableColors[normalizedType].push(player.colorIndex);
+          gameState.availableColors[normalizedType].sort();
+        }
+      }
     }
     gameState.players.delete(playerId);
     broadcast({ type: "playerLeft", playerId: playerId });
