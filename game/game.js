@@ -1021,15 +1021,8 @@ function toggle3DView(enabled) {
       if (window.render3D.setPathColor) {
         window.render3D.setPathColor(guiParams.pathColor);
       }
-      // Initialize color overrides if set (only if different from default)
-      const defaultColors = ["#ff0000", "#00ff00", "#0000ff", "#ffff00"];
+      // Initialize team images from config
       COLORS.forEach((colorName, colorIndex) => {
-        const colorKey = `${colorName}Color`;
-        const overrideColor = guiParams[colorKey];
-        if (overrideColor && overrideColor !== defaultColors[colorIndex] && window.render3D.setColorOverride) {
-          window.render3D.setColorOverride(colorIndex, overrideColor);
-        }
-        // Initialize team images from config
         if (window.teamConfig && window.teamConfig.teams) {
           const team = window.teamConfig.teams.find(t => t.colorIndex === colorIndex);
           if (team && team.image && team.image.trim() !== "" && window.render3D.setTeamImage) {
@@ -2126,27 +2119,6 @@ function updateCharacterAppearance(character) {
   // Remove old color classes
   COLORS.forEach((c) => el.classList.remove(c));
 
-  // Check for color overrides first
-  if (character.color) {
-    const colorIndex = COLORS.indexOf(character.color.toLowerCase());
-    if (colorIndex >= 0 && window.guiParams) {
-      const colorKey = `${COLORS[colorIndex]}Color`;
-      const overrideColor = window.guiParams[colorKey];
-      const defaultColors = ["#ff0000", "#00ff00", "#0000ff", "#ffff00"];
-      // Only apply override if it's different from default
-      if (overrideColor && overrideColor !== defaultColors[colorIndex]) {
-        if (isPacman) {
-          el.style.background = overrideColor;
-          el.style.borderColor = overrideColor;
-        } else if (isGhost) {
-          el.style.borderColor = overrideColor;
-        }
-        // Remove predefined color classes
-        COLORS.forEach((c) => el.classList.remove(c));
-        return;
-      }
-    }
-  }
 
   // Update color
   if (character.color) {
@@ -2223,16 +2195,7 @@ function flashCharacters(chaserColorIndex, fugitiveColorIndex) {
   // Get the color for the flash
   const colorName = COLORS[chaserColorIndex];
   const defaultColors = ["#ff0000", "#00ff00", "#0000ff", "#ffff00"];
-  let flashColor = defaultColors[chaserColorIndex];
-
-  // Check for color override
-  if (window.guiParams) {
-    const colorKey = `${colorName}Color`;
-    const overrideColor = window.guiParams[colorKey];
-    if (overrideColor && overrideColor !== defaultColors[chaserColorIndex]) {
-      flashColor = overrideColor;
-    }
-  }
+  const flashColor = defaultColors[chaserColorIndex];
 
   // Create flash effect using box-shadow
   const flashDuration = 300; // milliseconds

@@ -90,6 +90,9 @@ const gameState = {
   chasers: [],
   lastUpdate: Date.now(),
   caughtFugitives: new Set(), // Track which fugitives have been caught
+  firstPlayerId: null, // Player ID who started the game
+  firstPlayerName: null, // Name of player who started the game
+  isTeamGame: false, // Whether multiple chasers are playing
 };
 
 // Debug counters
@@ -451,6 +454,9 @@ function endGame(allCaught) {
     }
   });
 
+  // Save highscore if this is a new record
+  saveHighscore(teamScore, gameState.firstPlayerName, gameState.isTeamGame);
+
   // Reset game state after a short delay to show final scores
   setTimeout(() => {
     resetGame();
@@ -461,6 +467,9 @@ function resetGame() {
   gameState.gameStarted = false;
   gameState.gameStartTime = null;
   gameState.caughtFugitives.clear();
+  gameState.firstPlayerId = null;
+  gameState.firstPlayerName = null;
+  gameState.isTeamGame = false;
   
   // Reset speed settings to defaults
   gameState.fugitiveSpeed = 0.4;
@@ -740,6 +749,40 @@ function gameLoop() {
   broadcastGameState();
 }
 
+// ========== HIGHSCORE MANAGEMENT ==========
+const HIGHSCORE_FILE = path.join(__dirname, "highscore.json");
+
+function loadHighscore() {
+  try {
+    if (fs.existsSync(HIGHSCORE_FILE)) {
+      const data = fs.readFileSync(HIGHSCORE_FILE, "utf8");
+      return JSON.parse(data);
+    }
+  } catch (error) {
+    console.error("Error loading highscore:", error);
+  }
+  return { score: 0, playerName: null, isTeamGame: false };
+}
+
+function saveHighscore(score, playerName, isTeamGame) {
+  try {
+    const current = loadHighscore();
+    // Only save if this is a new highscore
+    if (score > current.score) {
+      const highscoreData = {
+        score: score,
+        playerName: playerName || "Unknown",
+        isTeamGame: isTeamGame,
+        date: new Date().toISOString(),
+      };
+      fs.writeFileSync(HIGHSCORE_FILE, JSON.stringify(highscoreData, null, 2), "utf8");
+      console.log(`New highscore saved: ${score} by ${playerName} (${isTeamGame ? "Team" : "Solo"})`);
+    }
+  } catch (error) {
+    console.error("Error saving highscore:", error);
+  }
+}
+
 // ========== HTTP SERVER ==========
 const server = http.createServer((req, res) => {
   res.setHeader("Access-Control-Allow-Origin", "*");
@@ -749,6 +792,14 @@ const server = http.createServer((req, res) => {
   if (req.method === "OPTIONS") {
     res.writeHead(200);
     res.end();
+    return;
+  }
+
+  // API endpoint for highscore
+  if (req.url === "/api/highscore" && req.method === "GET") {
+    const highscore = loadHighscore();
+    res.writeHead(200, { "Content-Type": "application/json" });
+    res.end(JSON.stringify(highscore), "utf-8");
     return;
   }
 
@@ -834,6 +885,21 @@ wss.on("connection", (ws, req) => {
           if (!gameState.gameStarted) {
             gameState.gameStarted = true;
             gameState.gameStartTime = Date.now();
+            
+            // Track first player (the one who clicked start)
+            gameState.firstPlayerId = playerId;
+            const firstPlayer = gameState.players.get(playerId);
+            gameState.firstPlayerName = firstPlayer ? (firstPlayer.playerName || "Unknown") : "Unknown";
+            
+            // Count connected chasers to determine if team game or solo
+            let chaserCount = 0;
+            gameState.players.forEach((player) => {
+              if (player.connected && player.type === "chaser") {
+                chaserCount++;
+              }
+            });
+            gameState.isTeamGame = chaserCount > 1;
+            
             // Reset all chaser stats when game starts
             gameState.players.forEach((player, playerId) => {
               if (player.connected && player.type === "chaser") {
