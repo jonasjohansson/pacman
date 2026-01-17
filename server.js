@@ -2,6 +2,8 @@
 // Server-authoritative: server maintains game state and runs game loop
 
 const http = require("http");
+const path = require("path");
+const fs = require("fs");
 const { WebSocketServer } = require("ws");
 const { MAP, COLS, ROWS, TUNNEL_ROW } = require("./public/map");
 
