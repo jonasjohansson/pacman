@@ -4,7 +4,7 @@ function getHTTPServerAddress() {
   const serverParam = params.get("server");
   
   const LOCAL_SERVER_ADDRESS = "http://localhost:3000";
-  const REMOTE_SERVER_ADDRESS = "https://pacman-3d.onrender.com";
+  const REMOTE_SERVER_ADDRESS = "https://pacman-server-239p.onrender.com";
   
   if (serverParam) {
     // If it's a full URL, use it directly
@@ -21,14 +21,13 @@ function getHTTPServerAddress() {
     }
   }
   
-  // Default: use current origin (works for both localhost and deployed sites)
-  // This allows the highscore page to work on any domain without hardcoding
+  // Default: use remote server (same as other pages)
+  // Note: jagad.smash.studio is just a static file server, the API is at pacman-server-239p.onrender.com
   if (window.location.origin === "http://localhost" || window.location.origin.startsWith("http://localhost:")) {
     return LOCAL_SERVER_ADDRESS;
   }
   
-  // For deployed sites, use the current origin
-  return window.location.origin;
+  return REMOTE_SERVER_ADDRESS;
 }
 
 async function loadHighscore() {

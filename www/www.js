@@ -614,6 +614,37 @@ function toggle3DView(enabled) {
       window.render3D.init();
       window.render3D.initialized = true;
     }
+
+    // Initialize 3D wall colors and path color from current GUI params
+    if (window.render3D && window.guiParams) {
+      if (window.render3D.setInnerWallColor) {
+        window.render3D.setInnerWallColor(window.guiParams.innerWallColor);
+      }
+      if (window.render3D.setOuterWallColor) {
+        window.render3D.setOuterWallColor(window.guiParams.outerWallColor);
+      }
+      if (window.render3D.setPathColor) {
+        window.render3D.setPathColor(window.guiParams.pathColor);
+      }
+      // Initialize camera zoom
+      if (window.render3D.setCameraZoom) {
+        window.render3D.setCameraZoom(window.guiParams.cameraZoom);
+      }
+      // Initialize camera type
+      if (window.render3D.setCameraType) {
+        window.render3D.setCameraType(window.guiParams.camera3D === "Orthographic");
+      }
+      // Initialize lighting
+      if (window.render3D.setAmbientLight) {
+        window.render3D.setAmbientLight(window.guiParams.ambientLightIntensity);
+      }
+      if (window.render3D.setDirectionalLight) {
+        window.render3D.setDirectionalLight(window.guiParams.directionalLightIntensity);
+      }
+      if (window.render3D.setPointLightIntensity) {
+        window.render3D.setPointLightIntensity(window.guiParams.pointLightIntensity);
+      }
+    }
   } else {
     if (gameContainer) gameContainer.style.display = "block";
     if (canvas) canvas.style.display = "none";
@@ -761,10 +792,27 @@ function initGUI() {
   });
 
   // Apply initial values
-  toggle3DView(view3D);
   document.body.style.backgroundColor = guiParams.bodyBackgroundColor;
+  
+  // Set initial opacity values
+  const buildingImage = document.getElementById("building-image");
+  if (buildingImage) {
+    buildingImage.style.opacity = guiParams.buildingOpacity;
+  }
+  const buildingRealImage = document.getElementById("building-real-image");
+  if (buildingRealImage) {
+    buildingRealImage.style.opacity = guiParams.buildingRealOpacity;
+    const translate = `translate(calc(-50% + ${guiParams.buildingRealX}px), calc(-50% + ${guiParams.buildingRealY}px))`;
+    buildingRealImage.style.transform = `${translate} scale(${guiParams.buildingRealScale})`;
+    buildingRealImage.style.mixBlendMode = guiParams.buildingRealBlendMode;
+  }
   const maze = document.getElementById("maze");
-  if (maze) maze.style.opacity = guiParams.mazeOpacity;
+  if (maze) {
+    maze.style.opacity = guiParams.mazeOpacity;
+  }
+  
+  // Initialize 3D view with all settings applied
+  toggle3DView(view3D);
 }
 
 // Initialize
