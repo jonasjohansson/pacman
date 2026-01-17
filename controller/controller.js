@@ -60,7 +60,23 @@ function getServerAddress() {
 }
 
 function getInitials() {
-  const initials = elements.initialsInput.value.toUpperCase().replace(/[^A-Z]/g, "").slice(0, 3);
+  // Default initials, will be prompted when game ends
+  return "JGD";
+}
+
+function promptForInitials() {
+  let initials = "";
+  while (!initials || initials.length === 0) {
+    const input = prompt("Enter your 3-letter initials:");
+    if (input === null) {
+      // User cancelled, use default
+      return "JGD";
+    }
+    initials = input.toUpperCase().replace(/[^A-Z]/g, "").slice(0, 3);
+    if (initials.length === 0) {
+      alert("Please enter at least one letter.");
+    }
+  }
   return initials || "JGD";
 }
 
@@ -138,6 +154,8 @@ function handleServerMessage(data) {
       if (data.players) {
         connectedPlayers.clear();
         let playerCount = 0;
+        // Check if this client's player is in the list and update myColorIndex
+        let foundMyPlayer = false;
         data.players.forEach((player) => {
           if (player.connected) {
             playerCount++;
@@ -146,8 +164,17 @@ function handleServerMessage(data) {
               colorIndex: player.colorIndex,
               stats: player.stats || null,
             });
+            // If this is our player, update myColorIndex
+            if (player.playerId === myPlayerId) {
+              myColorIndex = player.colorIndex;
+              foundMyPlayer = true;
+            }
           }
         });
+        // If we didn't find our player in the list, reset myColorIndex
+        if (!foundMyPlayer && myPlayerId) {
+          myColorIndex = null;
+        }
         isFirstPlayer = playerCount === 1 && myPlayerId && connectedPlayers.has(myPlayerId);
         updateScoreDisplay();
       }
@@ -155,12 +182,18 @@ function handleServerMessage(data) {
         availableChasers = data.availableColors.chaser;
         updateChaserButtons();
       }
+      // Always update button when gameState is received
       updateStartButton();
       break;
     case "gameStarted":
       gameStarted = true;
-      updateUI();
       elements.chaserSelect?.classList.add("game-started");
+      // Request latest game state to get updated available chasers
+      // The button will be updated when gameState response is received
+      if (ws && ws.readyState === WebSocket.OPEN) {
+        ws.send(JSON.stringify({ type: "gameState" }));
+      }
+      // Don't update UI here - wait for gameState response to update availableChasers first
       break;
     case "gameRestarted":
       gameStarted = false;
@@ -168,17 +201,29 @@ function handleServerMessage(data) {
       elements.chaserSelect?.classList.remove("game-started");
       break;
     case "gameEnd":
-      // Game ended - show alert with score
+      // Game ended - show alert with score and prompt for initials
       if (myColorIndex !== null) {
         const timeSeconds = (data.gameTime / 1000).toFixed(1);
         const message = data.allCaught
           ? `All Fugitives Caught!\n\nTime: ${timeSeconds}s\nTotal Score: ${data.score}\nFugitives Caught: ${data.fugitivesCaught}/${data.totalFugitives}`
           : `Time's Up!\n\nTime: ${timeSeconds}s\nTotal Score: ${data.score}\nFugitives Caught: ${data.fugitivesCaught}/${data.totalFugitives}`;
         alert(message);
-        // Reload page after alert
+        
+        // Prompt for initials
+        const initials = promptForInitials();
+        
+        // Send initials to server for highscore (if this is the first player)
+        if (isFirstPlayer && ws && ws.readyState === WebSocket.OPEN) {
+          ws.send(JSON.stringify({
+            type: "updatePlayerName",
+            playerName: initials,
+          }));
+        }
+        
+        // Reload page after a short delay
         setTimeout(() => {
           window.location.reload();
-        }, 100);
+        }, 500);
       }
       break;
     case "gameReset":
@@ -195,7 +240,6 @@ function handleServerMessage(data) {
 // UI Updates
 function updateUI() {
   updateStartButton();
-  updateInitialsInput();
 }
 
 function updateChaserButtons() {
@@ -229,31 +273,41 @@ function updateStartButton() {
   // Check if there are available chasers
   const hasAvailableChasers = availableChasers.length > 0;
   
-  if (isFirstPlayer && !gameStarted) {
-    // First player can start the game
+  if (isFirstPlayer) {
+    // First player always sees "Start" button
     elements.startBtn.textContent = "Start";
-    elements.startBtn.disabled = false;
-    elements.startBtn.classList.remove("disabled");
-  } else if (gameStarted && hasAvailableChasers && myColorIndex === null) {
-    // Game is active and there are free spots - show "Join"
-    elements.startBtn.textContent = "Join";
-    elements.startBtn.disabled = false;
-    elements.startBtn.classList.remove("disabled");
+    // Disable if game has started or no available chasers
+    elements.startBtn.disabled = gameStarted || !hasAvailableChasers;
+    elements.startBtn.classList.toggle("disabled", gameStarted || !hasAvailableChasers);
   } else {
-    // Default: show "Select" when game hasn't started and not first player
-    elements.startBtn.textContent = "Select";
-    elements.startBtn.disabled = !hasAvailableChasers || myColorIndex !== null;
-    elements.startBtn.classList.toggle("disabled", !hasAvailableChasers || myColorIndex !== null);
+    // Other players see "Select" or "Join"
+    if (gameStarted) {
+      // Game is active
+      if (myColorIndex === null && hasAvailableChasers) {
+        // Player hasn't joined and there are free spots - show "Join"
+        elements.startBtn.textContent = "Join";
+        elements.startBtn.disabled = false;
+        elements.startBtn.classList.remove("disabled");
+      } else if (myColorIndex !== null) {
+        // Player has already joined
+        elements.startBtn.textContent = "Select";
+        elements.startBtn.disabled = true;
+        elements.startBtn.classList.add("disabled");
+      } else {
+        // No spots available (but game is started)
+        elements.startBtn.textContent = "Select";
+        elements.startBtn.disabled = true;
+        elements.startBtn.classList.add("disabled");
+      }
+    } else {
+      // Game hasn't started - show "Select"
+      elements.startBtn.textContent = "Select";
+      elements.startBtn.disabled = !hasAvailableChasers || myColorIndex !== null;
+      elements.startBtn.classList.toggle("disabled", !hasAvailableChasers || myColorIndex !== null);
+    }
   }
 }
 
-function updateInitialsInput() {
-  if (!elements.initialsInput) return;
-  
-  const isLocked = myColorIndex !== null && gameStarted;
-  elements.initialsInput.disabled = isLocked;
-  elements.initialsInput.readOnly = isLocked;
-}
 
 function updateScoreDisplay() {
   let teamScore = 0;
@@ -276,7 +330,7 @@ function joinAsChaser(colorIndex) {
     type: "join",
     characterType: "chaser",
     colorIndex,
-    playerName: getInitials(),
+    playerName: "JGD", // Default, will be updated when game ends
   }));
 }
 
@@ -323,8 +377,6 @@ function updateJoystickFromKey(dir) {
 
 // Input handlers
 function handleKeyDown(e) {
-  if (document.activeElement === elements.initialsInput) return;
-  
   const dir = KEY_TO_DIR[e.key.toLowerCase()];
   if (!dir) return;
   
@@ -336,8 +388,6 @@ function handleKeyDown(e) {
 }
 
 function handleKeyUp(e) {
-  if (document.activeElement === elements.initialsInput) return;
-  
   const key = e.key.toLowerCase();
   if (!KEY_TO_DIR[key]) return;
   
@@ -438,7 +488,6 @@ function initElements() {
     chaserButtons: document.querySelectorAll(".chaser-btn[data-index]"),
     startBtn: document.getElementById("start-btn"),
     chaserSelect: document.getElementById("chaser-select"),
-    initialsInput: document.getElementById("initials-input"),
     scoreValue: document.getElementById("score-value")
   };
 }
@@ -471,12 +520,6 @@ function initEventListeners() {
       }
     });
   });
-
-  if (elements.initialsInput) {
-    elements.initialsInput.addEventListener("input", (e) => {
-      e.target.value = e.target.value.toUpperCase().replace(/[^A-Z]/g, "").slice(0, 3);
-    });
-  }
 
   document.addEventListener("keydown", handleKeyDown, true);
   document.addEventListener("keyup", handleKeyUp, true);

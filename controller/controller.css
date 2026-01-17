@@ -24,21 +24,6 @@ body {
   flex-shrink: 0;
 }
 
-.initials-input {
-  width: 100%;
-  padding: var(--spacing-lg);
-  background: white;
-  border-top: var(--border-width) solid black;
-  border-left: var(--border-width) solid black;
-  border-right: none;
-  border-bottom: none;
-  color: black;
-  text-align: center;
-  text-transform: uppercase;
-  grid-column: 1;
-  grid-row: 1;
-  outline: none;
-}
 
 .chaser-select {
   display: grid;
@@ -50,15 +35,7 @@ body {
 }
 
 .chaser-select.game-started {
-  grid-template-rows: 2fr;
-}
-
-.chaser-select.game-started .chaser-btn[data-index]:not([data-index="start"]) {
-  display: none;
-}
-
-.chaser-select.game-started .chaser-btn.start-btn {
-  display: none;
+  /* Keep 2 rows visible when game starts */
 }
 
 .chaser-btn.start-btn {
@@ -76,7 +53,7 @@ body {
   display: flex;
   align-items: center;
   justify-content: center;
-  grid-column: 2 / 6;
+  grid-column: 1 / 6;
   grid-row: 1;
 }
 

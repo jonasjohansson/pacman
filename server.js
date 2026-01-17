@@ -933,6 +933,17 @@ wss.on("connection", (ws, req) => {
         case "gameState":
           sendGameState(ws);
           break;
+        case "updatePlayerName":
+          // Update player name (for highscore purposes)
+          const player = gameState.players.get(playerId);
+          if (player && data.playerName) {
+            player.playerName = data.playerName;
+            // If this is the first player, update firstPlayerName for highscore
+            if (playerId === gameState.firstPlayerId) {
+              gameState.firstPlayerName = data.playerName;
+            }
+          }
+          break;
         default:
       }
     } catch (error) {}
