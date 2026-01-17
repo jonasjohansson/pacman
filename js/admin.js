@@ -1,25 +1,5 @@
 // Admin page JavaScript
-const REMOTE_SERVER_ADDRESS = "https://pacman-server-239p.onrender.com";
-const LOCAL_SERVER_ADDRESS = "http://localhost:3000";
-
-// Get server address from URL parameter or default
-function getServerFromURL() {
-  const params = new URLSearchParams(window.location.search);
-  const serverParam = params.get("server");
-  
-  if (serverParam) {
-    if (serverParam === "local") {
-      return LOCAL_SERVER_ADDRESS;
-    } else if (serverParam === "remote") {
-      return REMOTE_SERVER_ADDRESS;
-    } else {
-      // Assume it's a full URL
-      return serverParam;
-    }
-  }
-  
-  return REMOTE_SERVER_ADDRESS; // Default to remote
-}
+import { getServerFromURL, getWebSocketAddress } from "./utils.js";
 
 let ws = null;
 let gameStarted = false;
@@ -27,9 +7,7 @@ let gameStarted = false;
 // Initialize WebSocket connection
 function initWebSocket() {
   const serverAddress = getServerFromURL();
-  const wsProtocol = serverAddress.startsWith("https") ? "wss" : "ws";
-  const wsUrl = serverAddress.replace(/^https?:\/\//, "").replace(/^http:\/\//, "");
-  const wsAddress = `${wsProtocol}://${wsUrl}`;
+  const wsAddress = getWebSocketAddress(serverAddress);
   
   console.log("[Admin] Connecting to:", wsAddress);
   

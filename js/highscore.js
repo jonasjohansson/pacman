@@ -1,34 +1,5 @@
-// Get HTTP server address from URL parameter or default
-function getHTTPServerAddress() {
-  const params = new URLSearchParams(window.location.search);
-  const serverParam = params.get("server");
-  
-  const LOCAL_SERVER_ADDRESS = "http://localhost:3000";
-  const REMOTE_SERVER_ADDRESS = "https://pacman-server-239p.onrender.com";
-  
-  if (serverParam) {
-    // If it's a full URL, use it directly
-    if (serverParam.startsWith("http://") || serverParam.startsWith("https://")) {
-      return serverParam;
-    }
-    // If it's "local" or "localhost", use local server
-    if (serverParam.toLowerCase() === "local" || serverParam.toLowerCase() === "localhost") {
-      return LOCAL_SERVER_ADDRESS;
-    }
-    // If it's "remote" or "render", use remote server
-    if (serverParam.toLowerCase() === "remote" || serverParam.toLowerCase() === "render") {
-      return REMOTE_SERVER_ADDRESS;
-    }
-  }
-  
-  // Default: use remote server (same as other pages)
-  // Note: jagad.smash.studio is just a static file server, the API is at pacman-server-239p.onrender.com
-  if (window.location.origin === "http://localhost" || window.location.origin.startsWith("http://localhost:")) {
-    return LOCAL_SERVER_ADDRESS;
-  }
-  
-  return REMOTE_SERVER_ADDRESS;
-}
+// Import shared utilities
+import { getHTTPServerAddress } from "./utils.js";
 
 async function loadHighscore() {
   const loadingEl = document.getElementById("loading");

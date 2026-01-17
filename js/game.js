@@ -973,72 +973,7 @@ function updateDebugDisplay() {
   }
 }
 
-// Debug display functions
-function createDebugDisplay() {
-  removeDebugDisplay(); // Remove existing if any
-  
-  const debugDiv = document.createElement("div");
-  debugDiv.id = "debug-display";
-  debugDiv.style.position = "fixed";
-  debugDiv.style.top = "10px";
-  debugDiv.style.left = "10px";
-  debugDiv.style.backgroundColor = "rgba(0, 0, 0, 0.8)";
-  debugDiv.style.color = "#0f0";
-  debugDiv.style.fontFamily = "monospace";
-  debugDiv.style.fontSize = "12px";
-  debugDiv.style.padding = "10px";
-  debugDiv.style.borderRadius = "5px";
-  debugDiv.style.zIndex = "10000";
-  debugDiv.style.pointerEvents = "none";
-  document.body.appendChild(debugDiv);
-  
-  // Start update loop
-  updateDebugDisplay();
-}
-
-function removeDebugDisplay() {
-  const debugDiv = document.getElementById("debug-display");
-  if (debugDiv) {
-    debugDiv.remove();
-  }
-}
-
-function updateDebugDisplay() {
-  const debugDiv = document.getElementById("debug-display");
-  if (!debugDiv || !guiParams.showDebug) return;
-  
-  const now = Date.now();
-  const fps = animationId ? Math.round(1000 / 16) : 0; // Approximate
-  
-  // Calculate ping (simulate with round-trip)
-  const ping = inputResponseTime > 0 ? Math.round(inputResponseTime / 2) : 0;
-  
-  let html = `<strong>DEBUG INFO</strong><br>`;
-  html += `─────────────────────<br>`;
-  html += `FPS: ${fps}<br>`;
-  html += `Ping: ${ping}ms<br>`;
-  html += `Server Update: ${serverUpdateInterval}ms<br>`;
-  html += `Input Response: ${inputResponseTime}ms<br>`;
-  html += `─────────────────────<br>`;
-  html += `Connected: ${multiplayerMode ? "Yes" : "No"}<br>`;
-  html += `Player ID: ${myPlayerId || "None"}<br>`;
-  html += `Character: ${myCharacterType || "None"}<br>`;
-  html += `Color Index: ${myColorIndex !== null ? myColorIndex : "None"}<br>`;
-  html += `─────────────────────<br>`;
-  
-  if (myColorIndex !== null && ghosts[myColorIndex]) {
-    const ghost = ghosts[myColorIndex];
-    html += `Position: (${ghost.x}, ${ghost.y})<br>`;
-    html += `Target: (${ghost.targetX}, ${ghost.targetY})<br>`;
-    html += `Pixel: (${Math.round(ghost.px)}, ${Math.round(ghost.py)})<br>`;
-  }
-  
-  debugDiv.innerHTML = html;
-  
-  if (false) { // Debug display removed
-    setTimeout(updateDebugDisplay, 100); // Update every 100ms
-  }
-}
+// Removed unused debug display functions
 
 function updateAvailableColors(availableColors) {
   // Update character selection controllers (radio-like) based on availability
@@ -2371,13 +2306,7 @@ if (document.readyState === "loading") {
   document.addEventListener("DOMContentLoaded", () => {
     // Wait a bit for lil-gui to load
     setTimeout(init, 100);
-    // Setup dome entry handler
-    setTimeout(setupDomeEntry, 200);
-    // Setup canvas drag and drop
-    setTimeout(setupCanvasDragDrop, 200);
   });
 } else {
   setTimeout(init, 100);
-  setTimeout(setupDomeEntry, 200);
-  setTimeout(setupCanvasDragDrop, 200);
 }

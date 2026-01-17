@@ -1,36 +1,10 @@
-// Import shared D-pad component
+// Import shared utilities
 import { initDpad, getCurrentDirection } from "./dpad.js";
+import { getServerFromURL, getWebSocketAddress, promptForInitials } from "./utils.js";
 
 // Constants
-const REMOTE_SERVER_ADDRESS = "https://pacman-server-239p.onrender.com";
-const LOCAL_SERVER_ADDRESS = "http://localhost:3000";
 const INPUT_THROTTLE = 50; // Throttle input to prevent excessive messages
 const DEBUG = false; // Set to true to enable debug logging
-
-// Get server address from URL parameter or default
-function getServerFromURL() {
-  const params = new URLSearchParams(window.location.search);
-  const serverParam = params.get("server");
-  
-  if (serverParam) {
-    // If it's a full URL, use it directly
-    if (serverParam.startsWith("http://") || serverParam.startsWith("https://")) {
-      return serverParam;
-    }
-    // If it's "local" or "localhost", use local server
-    if (serverParam.toLowerCase() === "local" || serverParam.toLowerCase() === "localhost") {
-      return LOCAL_SERVER_ADDRESS;
-    }
-    
-    // If it's "remote" or "render", use remote server
-    if (serverParam.toLowerCase() === "remote" || serverParam.toLowerCase() === "render") {
-      return REMOTE_SERVER_ADDRESS;
-    }
-  }
-  
-  // Default: use remote server
-  return REMOTE_SERVER_ADDRESS;
-}
 
 // State
 let ws = null;
@@ -62,41 +36,7 @@ function getServerAddress() {
   return getServerFromURL();
 }
 
-function promptForInitials() {
-  let initials = "";
-  while (!initials || initials.length === 0) {
-    const input = prompt("Enter your 3-letter initials:");
-    if (input === null) {
-      // User cancelled
-      return null;
-    }
-    initials = input.toUpperCase().replace(/[^A-Z]/g, "").slice(0, 3);
-    if (initials.length === 0) {
-      alert("Please enter at least one letter.");
-    }
-  }
-  return initials || null;
-}
-
-function calculateDirection(deltaX, deltaY, threshold = JOYSTICK_THRESHOLD) {
-  if (Math.abs(deltaX) > Math.abs(deltaY)) {
-    if (deltaX > threshold) return "right";
-    if (deltaX < -threshold) return "left";
-  } else {
-    if (deltaY > threshold) return "down";
-    if (deltaY < -threshold) return "up";
-  }
-  return null;
-}
-
-function getJoystickCenter() {
-  const rect = elements.joystickBase.getBoundingClientRect();
-  return {
-    x: rect.left + rect.width / 2,
-    y: rect.top + rect.height / 2,
-    maxDistance: Math.min(rect.width, rect.height) / 2 - JOYSTICK_OFFSET
-  };
-}
+// Removed duplicate functions - now using dpad.js module
 
 function sendInput(dir) {
   if (!ws || ws.readyState !== WebSocket.OPEN || !myPlayerId || myColorIndex === null || !gameStarted) {
@@ -115,13 +55,14 @@ function sendInput(dir) {
 
 // WebSocket
 function initWebSocket() {
-  const wsUrl = getServerAddress().replace(/^https?:/, (m) => m === "https:" ? "wss:" : "ws:");
+  const serverAddress = getServerAddress();
+  const wsUrl = getWebSocketAddress(serverAddress);
 
   try {
     ws = new WebSocket(wsUrl);
 
     ws.onopen = () => {
-      console.log("[WebSocket] Connection opened");
+      if (DEBUG) console.log("[WebSocket] Connection opened");
       if (ws.readyState === WebSocket.OPEN) {
         ws.send(JSON.stringify({ type: "gameState" }));
       }
@@ -130,16 +71,12 @@ function initWebSocket() {
     ws.onmessage = (event) => {
       try {
         const data = JSON.parse(event.data);
-        // Only log important messages (not gameState which is sent frequently)
-        if (data.type === "gameEnd") {
-          console.log("[WebSocket] ===== GAME END MESSAGE RECEIVED IN ONMESSAGE =====", data);
-        } else if (data.type !== "gameState") {
-          // Log other messages except gameState
-          console.log("[WebSocket] Received message type:", data.type);
+        if (DEBUG && data.type !== "gameState") {
+          console.log("[WebSocket] Received:", data.type);
         }
         handleServerMessage(data);
       } catch (error) {
-        console.error("Error parsing message:", error, event.data);
+        console.error("[WebSocket] Error parsing message:", error);
       }
     };
 
@@ -147,7 +84,7 @@ function initWebSocket() {
       console.error("[WebSocket] Error:", error);
     };
     ws.onclose = () => {
-      console.log("[WebSocket] Connection closed, reconnecting in 3 seconds...");
+      if (DEBUG) console.log("[WebSocket] Connection closed, reconnecting...");
       setTimeout(initWebSocket, 3000);
     };
   } catch (error) {
@@ -612,9 +549,4 @@ if (document.readyState === "loading") {
   initWebSocket();
 }
 
-// Test function to verify alert works - can be called from console: testAlert()
-window.testAlert = function() {
-  console.log("[TEST] Testing alert function...");
-  alert("Test alert - if you see this, alerts work!");
-  console.log("[TEST] Alert was shown and dismissed");
-};
+// Removed test function
