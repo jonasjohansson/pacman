@@ -5,8 +5,30 @@ const INPUT_THROTTLE = 50;
 const JOYSTICK_THRESHOLD = 30;
 const JOYSTICK_OFFSET = 40;
 
-// Configuration
-const useLocalServer = window.location.hostname === "localhost" || window.location.hostname === "127.0.0.1";
+// Get server address from URL parameter or default
+function getServerFromURL() {
+  const params = new URLSearchParams(window.location.search);
+  const serverParam = params.get("server");
+  
+  if (serverParam) {
+    // If it's a full URL, use it directly
+    if (serverParam.startsWith("http://") || serverParam.startsWith("https://")) {
+      return serverParam;
+    }
+    // If it's "local" or "localhost", use local server
+    if (serverParam.toLowerCase() === "local" || serverParam.toLowerCase() === "localhost") {
+      return LOCAL_SERVER_ADDRESS;
+    }
+    // If it's "remote" or "render", use remote server
+    if (serverParam.toLowerCase() === "remote" || serverParam.toLowerCase() === "render") {
+      return REMOTE_SERVER_ADDRESS;
+    }
+  }
+  
+  // Default: use local if on localhost, otherwise remote
+  const isLocalhost = window.location.hostname === "localhost" || window.location.hostname === "127.0.0.1";
+  return isLocalhost ? LOCAL_SERVER_ADDRESS : REMOTE_SERVER_ADDRESS;
+}
 
 // Key to direction mapping
 const KEY_TO_DIR = {
@@ -35,7 +57,7 @@ let elements = {};
 
 // Utility functions
 function getServerAddress() {
-  return useLocalServer ? LOCAL_SERVER_ADDRESS : REMOTE_SERVER_ADDRESS;
+  return getServerFromURL();
 }
 
 function getInitials() {

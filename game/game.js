@@ -105,7 +105,6 @@ let gui = null;
 // Multiplayer state
 const REMOTE_SERVER_ADDRESS = "https://pacman-server-239p.onrender.com";
 const LOCAL_SERVER_ADDRESS = "http://localhost:3000";
-let useLocalServer = false;
 let ws = null;
 let myPlayerId = null;
 let myCharacterType = null; // 'pacman' or 'ghost'
@@ -119,8 +118,33 @@ let lastPositionUpdate = 0;
 const POSITION_UPDATE_INTERVAL = 16; // Send position updates every ~16ms (60fps)
 let reconnectTimeoutId = null;
 
+// Get server address from URL parameter or default
+function getServerFromURL() {
+  const params = new URLSearchParams(window.location.search);
+  const serverParam = params.get("server");
+  
+  if (serverParam) {
+    // If it's a full URL, use it directly
+    if (serverParam.startsWith("http://") || serverParam.startsWith("https://")) {
+      return serverParam;
+    }
+    // If it's "local" or "localhost", use local server
+    if (serverParam.toLowerCase() === "local" || serverParam.toLowerCase() === "localhost") {
+      return LOCAL_SERVER_ADDRESS;
+    }
+    // If it's "remote" or "render", use remote server
+    if (serverParam.toLowerCase() === "remote" || serverParam.toLowerCase() === "render") {
+      return REMOTE_SERVER_ADDRESS;
+    }
+  }
+  
+  // Default: use local if on localhost, otherwise remote
+  const isLocalhost = window.location.hostname === "localhost" || window.location.hostname === "127.0.0.1";
+  return isLocalhost ? LOCAL_SERVER_ADDRESS : REMOTE_SERVER_ADDRESS;
+}
+
 function getServerAddress() {
-  return useLocalServer ? LOCAL_SERVER_ADDRESS : REMOTE_SERVER_ADDRESS;
+  return getServerFromURL();
 }
 
 // Client-side movement intent for my controlled character
@@ -209,11 +233,10 @@ function initWebSocket() {
   }
 }
 
-// Switch between remote Render server and local server
+// Switch server (kept for backward compatibility, but server is now set via URL parameter)
 function switchServer(useLocal) {
-  useLocalServer = useLocal;
-
-  // Reset multiplayer identity so we don't keep stale IDs when switching backends
+  // Server is now determined by URL parameter, so this function is deprecated
+  // Reset multiplayer identity
   myPlayerId = null;
   myCharacterType = null;
   myColorIndex = null;
@@ -1081,7 +1104,6 @@ function init() {
 
     // Make guiParams global so it can be accessed by updateCharacterAppearance
     window.guiParams = {
-      serverTarget: "Render",
       difficulty: 0.8,
       fugitiveSpeed: 0.4,
       chaserSpeed: 0.41, // Slightly faster than fugitives
@@ -1139,13 +1161,6 @@ function init() {
     gui.add(guiParams, "startGameCycle").name("Start Game");
     gui.add(guiParams, "resetGameCycle").name("Reset Game");
 
-    // Server control
-    gui
-      .add(guiParams, "serverTarget", ["Render", "Local"])
-      .name("Server")
-      .onChange((value) => {
-        switchServer(value === "Local");
-      });
 
     // Create 2D/3D folder
     const view3DFolder = gui.addFolder("2D/3D");
