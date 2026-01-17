@@ -1007,11 +1007,12 @@ function toggle3DView(enabled) {
         if (overrideColor && overrideColor !== defaultColors[colorIndex] && window.render3D.setColorOverride) {
           window.render3D.setColorOverride(colorIndex, overrideColor);
         }
-        // Initialize team images
-        const imageKey = `team${colorIndex + 1}Image`;
-        const teamImage = guiParams[imageKey];
-        if (teamImage && teamImage.trim() !== "" && window.render3D.setTeamImage) {
-          window.render3D.setTeamImage(colorIndex, teamImage);
+        // Initialize team images from config
+        if (window.teamConfig && window.teamConfig.teams) {
+          const team = window.teamConfig.teams.find(t => t.colorIndex === colorIndex);
+          if (team && team.image && team.image.trim() !== "" && window.render3D.setTeamImage) {
+            window.render3D.setTeamImage(colorIndex, team.image);
+          }
         }
       });
       // Initialize camera zoom
@@ -1110,10 +1111,6 @@ function init() {
       greenColor: "#00ff00", // Green color override
       blueColor: "#0000ff", // Blue color override
       yellowColor: "#ffff00", // Yellow color override
-      team1Image: "../assets/team1.jpg", // Team 1 image path (empty = no image)
-      team2Image: "../assets/team2.jpg", // Team 2 image path (empty = no image)
-      team3Image: "../assets/team3.jpg", // Team 3 image path (empty = no image)
-      team4Image: "../assets/team4.jpg", // Team 4 image path (empty = no image)
       startGameCycle: () => startGame(),
       resetGameCycle: () => restartGame(),
       joinQueue: () => joinQueue(),
@@ -1139,8 +1136,8 @@ function init() {
       });
 
     // Game cycle controls
-    gui.add(guiParams, "startGameCycle").name("Start game cycle");
-    gui.add(guiParams, "resetGameCycle").name("Reset game cycle");
+    gui.add(guiParams, "startGameCycle").name("Start Game");
+    gui.add(guiParams, "resetGameCycle").name("Reset Game");
 
     // Server control
     gui
@@ -1509,7 +1506,7 @@ function init() {
       window.characterControllers.ghost[i] = chaserCtrl;
     }
 
-    // Create Team Settings folder for color and image controls
+    // Create Team Settings folder for color controls only (images are loaded from JSON)
     const teamSettingsFolder = gui.addFolder("Team Settings");
     teamSettingsFolder.close(); // Closed by default
 
@@ -1557,34 +1554,6 @@ function init() {
             }
           }
         });
-
-      // Team image control (for fugitives only)
-      const imageKey = `team${teamNumber}Image`;
-      teamSettingsFolder
-        .add(guiParams, imageKey)
-        .name(`Team ${teamNumber} Image`)
-        .onChange((value) => {
-          // Update 2D fugitive image
-          if (pacmen[colorIndex] && pacmen[colorIndex].element) {
-            if (value && value.trim() !== "") {
-              pacmen[colorIndex].element.style.backgroundImage = `url(${value})`;
-              pacmen[colorIndex].element.style.backgroundSize = "cover";
-              pacmen[colorIndex].element.style.backgroundPosition = "center";
-              pacmen[colorIndex].element.style.backgroundRepeat = "no-repeat";
-            } else {
-              pacmen[colorIndex].element.style.backgroundImage = "";
-              pacmen[colorIndex].element.style.backgroundSize = "";
-              pacmen[colorIndex].element.style.backgroundPosition = "";
-              pacmen[colorIndex].element.style.backgroundRepeat = "";
-              updateCharacterAppearance(pacmen[colorIndex]);
-            }
-          }
-
-          // Update 3D fugitive image
-          if (view3D && window.render3D && window.render3D.setTeamImage) {
-            window.render3D.setTeamImage(colorIndex, value);
-          }
-        });
     });
 
     // Score display (team score - same for all chasers)
@@ -1592,17 +1561,17 @@ function init() {
       chaserScore: charactersFolder.add({ value: 0 }, "value").name("Chaser Team Score").disable(),
     };
 
-    // Apply team images to existing characters after GUI is initialized
-    COLORS.forEach((colorName, colorIndex) => {
-      const imageKey = `team${colorIndex + 1}Image`;
-      const teamImage = guiParams[imageKey];
-      if (teamImage && teamImage.trim() !== "" && pacmen[colorIndex] && pacmen[colorIndex].element) {
-        pacmen[colorIndex].element.style.backgroundImage = `url(${teamImage})`;
-        pacmen[colorIndex].element.style.backgroundSize = "cover";
-        pacmen[colorIndex].element.style.backgroundPosition = "center";
-        pacmen[colorIndex].element.style.backgroundRepeat = "no-repeat";
-      }
-    });
+    // Apply team images from config to existing characters after GUI is initialized
+    if (window.teamConfig && window.teamConfig.teams) {
+      window.teamConfig.teams.forEach((team) => {
+        if (team.image && team.image.trim() !== "" && pacmen[team.colorIndex] && pacmen[team.colorIndex].element) {
+          pacmen[team.colorIndex].element.style.backgroundImage = `url(${team.image})`;
+          pacmen[team.colorIndex].element.style.backgroundSize = "cover";
+          pacmen[team.colorIndex].element.style.backgroundPosition = "center";
+          pacmen[team.colorIndex].element.style.backgroundRepeat = "no-repeat";
+        }
+      });
+    }
 
     // Send initial speed config and game duration to server
     sendSpeedConfig(guiParams.fugitiveSpeed, guiParams.chaserSpeed);
@@ -2237,15 +2206,14 @@ function updateCharacterAppearance(character) {
     }
   }
 
-  // Update image - check for team image first, then character.image
+  // Update image - check for team image from config first, then character.image
   let imageToUse = null;
   if (isPacman && character.color) {
     const colorIndex = COLORS.indexOf(character.color.toLowerCase());
-    if (colorIndex >= 0 && window.guiParams) {
-      const imageKey = `team${colorIndex + 1}Image`;
-      const teamImage = window.guiParams[imageKey];
-      if (teamImage && teamImage.trim() !== "") {
-        imageToUse = teamImage;
+    if (colorIndex >= 0 && window.teamConfig && window.teamConfig.teams) {
+      const team = window.teamConfig.teams.find(t => t.colorIndex === colorIndex);
+      if (team && team.image && team.image.trim() !== "") {
+        imageToUse = team.image;
       }
     }
   }

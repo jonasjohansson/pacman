@@ -12,6 +12,18 @@
       href="style.css" />
     <script src="map.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/lil-gui@0.21"></script>
+    <script>
+      // Load team configuration before game initializes
+      window.teamConfig = { teams: [] }; // Default empty config
+      fetch("team-config.json")
+        .then(response => response.json())
+        .then(data => {
+          window.teamConfig = data;
+        })
+        .catch(error => {
+          console.error("Error loading team config:", error);
+        });
+    </script>
   </head>
   <body>
     <canvas
