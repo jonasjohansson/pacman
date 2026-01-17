@@ -27,7 +27,7 @@ let previousPlayerNames = new Map();
 let previousMyColorIndex = null;
 let previousGameStarted = false;
 let previousSelectedChaserIndex = null;
-let gameEndHandled = false; // Prevent multiple gameEnd alerts
+// Removed gameEndHandled flag - each controller is independent
 
 // DOM elements (cached) - initialized after DOM is ready
 let elements = {};
@@ -280,13 +280,6 @@ function handleServerMessage(data) {
       // Game ended - show alert with score and reload page
       console.log("[gameEnd] Handler called with data:", data);
       
-      // Prevent multiple gameEnd handlers from running simultaneously on THIS controller
-      if (gameEndHandled) {
-        console.log("[gameEnd] Already handled on this controller, ignoring duplicate message");
-        break; // Use break instead of return to stay in switch statement
-      }
-      gameEndHandled = true;
-      
       // Immediately update state
       gameStarted = false;
       previousGameStarted = false;
@@ -313,11 +306,13 @@ function handleServerMessage(data) {
       }
       
       console.log("[gameEnd] About to show alert with message:", message);
+      console.log("[gameEnd] Controller ID:", myPlayerId, "Color Index:", myColorIndex);
       
-      // Use setTimeout to ensure alert is shown in the next event loop tick
-      // This prevents any potential race conditions with page reload
+      // Show alert immediately - each controller should show its own alert
+      // Use setTimeout to ensure it's in the event loop, but with minimal delay
       setTimeout(() => {
         try {
+          console.log("[gameEnd] Showing alert now...");
           // Show alert - alert() is a blocking call, so execution pauses here
           // until the user clicks OK. Only then will the code continue to reload.
           alert(message);
@@ -332,7 +327,7 @@ function handleServerMessage(data) {
           alert("Game Over! Your score: " + (data.score || 0));
           window.location.reload();
         }
-      }, 100); // Small delay to ensure message is processed
+      }, 50); // Minimal delay to ensure message processing
       break;
     case "gameReset":
     case "gameRestarted":
@@ -344,7 +339,6 @@ function handleServerMessage(data) {
       selectedChaserName = null;
       pendingStartGame = false;
       isFirstPlayer = false;
-      gameEndHandled = false; // Reset flag when game resets
       // Reset score display to show current score
       updateScoreDisplay();
       updateChaserButtons();

@@ -1407,18 +1407,23 @@ function handleDisconnect(playerId) {
 function broadcast(message) {
   const data = JSON.stringify(message); // Stringify once, reuse for all clients
   let clientCount = 0;
+  let errorCount = 0;
   wss.clients.forEach((client) => {
     if (client.readyState === 1) {
       clientCount++;
       try {
         client.send(data);
       } catch (error) {
+        errorCount++;
         console.error("[broadcast] Error sending to client:", error);
       }
+    } else {
+      console.log(`[broadcast] Skipping client with readyState: ${client.readyState}`);
     }
   });
   if (message.type === "gameEnd") {
-    console.log(`[broadcast] Sent gameEnd message to ${clientCount} connected clients`);
+    console.log(`[broadcast] Sent gameEnd message to ${clientCount} connected clients (${errorCount} errors)`);
+    console.log(`[broadcast] Total WebSocket clients: ${wss.clients.size}`);
   }
 }
 
