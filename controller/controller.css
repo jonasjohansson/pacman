@@ -49,13 +49,7 @@ body {
   text-transform: uppercase;
   grid-column: 1;
   grid-row: 1;
-}
-
-.initials-input:focus {
-  border-top: var(--border-width) solid black;
-  border-left: var(--border-width) solid black;
-  border-right: none;
-  border-bottom: none;
+  outline: none;
 }
 
 .chaser-select {
@@ -68,7 +62,15 @@ body {
 }
 
 .chaser-select.game-started {
-  grid-template-rows: 1fr;
+  grid-template-rows: 2fr;
+}
+
+.chaser-select.game-started .chaser-btn[data-index]:not([data-index="start"]) {
+  display: none;
+}
+
+.chaser-select.game-started .chaser-btn.start-btn {
+  display: none;
 }
 
 .chaser-btn.start-btn {
