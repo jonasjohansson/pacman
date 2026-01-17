@@ -352,16 +352,33 @@ function checkCollisions() {
 
         // Calculate time to catch (from game start)
         const catchTime = Date.now() - gameState.gameStartTime;
+        const catchTimeSeconds = catchTime / 1000;
 
-        // Update all chaser players' scores (lower time = better score)
-        // Score is based on how fast all fugitives are caught
+        // Calculate score for this catch: faster catches = higher score
+        // Formula: 1000 points base, minus time penalty (10 points per second)
+        // This rewards faster individual catches
+        const catchScore = Math.max(0, 1000 - Math.floor(catchTimeSeconds * 10));
+
+        // Update all chaser players' scores (team score - all chasers share the same score)
+        // Track individual catch times for final scoring
+        let teamScore = 0;
         gameState.players.forEach((player, playerId) => {
           if (player.connected && player.type === "chaser") {
-            // Track total catch time for scoring
+            // Track total catch time for final scoring
             player.stats.totalCaptureTime = (player.stats.totalCaptureTime || 0) + catchTime;
             player.stats.catches = (player.stats.catches || 0) + 1;
-            // Score = number of catches (will be finalized at game end)
-            player.stats.chaserScore = player.stats.catches;
+            // Track individual catch scores
+            player.stats.catchScores = player.stats.catchScores || [];
+            player.stats.catchScores.push(catchScore);
+            // Calculate cumulative team score (sum of all catch scores)
+            teamScore = player.stats.catchScores.reduce((sum, score) => sum + score, 0);
+          }
+        });
+
+        // Set the same team score for all chasers
+        gameState.players.forEach((player, playerId) => {
+          if (player.connected && player.type === "chaser") {
+            player.stats.chaserScore = teamScore;
           }
         });
 
@@ -387,27 +404,36 @@ function endGame(allCaught) {
   gameState.gameStarted = false;
   const gameTime = Date.now() - gameState.gameStartTime;
 
-  // Calculate final scores for all chaser players
+  // Calculate final team score (all chasers share the same score)
+  // Use the cumulative score from individual catches, with bonus for completing all
+  let teamScore = 0;
   gameState.players.forEach((player, playerId) => {
     if (player.connected && player.type === "chaser") {
-      let finalScore = 0;
-
-      if (allCaught) {
-        // Score based on how fast all fugitives were caught (lower time = higher score)
-        // Formula: 10000 - (total time in seconds * 10)
-        // This gives higher scores for faster completions
-        const totalTimeSeconds = gameTime / 1000;
-        finalScore = Math.max(0, 10000 - Math.floor(totalTimeSeconds * 10));
-      } else {
-        // Didn't catch all fugitives - lower score based on how many were caught
-        const caughtCount = gameState.caughtFugitives.size;
-        const totalCount = gameState.fugitives.length;
-        const caughtPercentage = caughtCount / totalCount;
-        // Score = percentage of fugitives caught * 5000 (max score if all caught but slower)
-        finalScore = Math.floor(caughtPercentage * 5000);
+      // Sum up all individual catch scores
+      if (player.stats.catchScores && player.stats.catchScores.length > 0) {
+        teamScore = player.stats.catchScores.reduce((sum, score) => sum + score, 0);
       }
+    }
+  });
 
-      player.stats.chaserScore = finalScore;
+  // Add completion bonus if all fugitives were caught
+  if (allCaught) {
+    // Bonus based on total time: faster completion = higher bonus
+    const totalTimeSeconds = gameTime / 1000;
+    const timeBonus = Math.max(0, 2000 - Math.floor(totalTimeSeconds * 5));
+    teamScore += timeBonus;
+  } else {
+    // Partial completion: reduce score based on how many were caught
+    const caughtCount = gameState.caughtFugitives.size;
+    const totalCount = gameState.fugitives.length;
+    const caughtPercentage = caughtCount / totalCount;
+    teamScore = Math.floor(teamScore * caughtPercentage);
+  }
+
+  // Set the same team score for all chasers and send game end message
+  gameState.players.forEach((player, playerId) => {
+    if (player.connected && player.type === "chaser") {
+      player.stats.chaserScore = teamScore;
 
       // Send game end message
       player.ws.send(
@@ -415,7 +441,7 @@ function endGame(allCaught) {
           type: "gameEnd",
           allCaught: allCaught,
           gameTime: gameTime,
-          score: finalScore,
+          score: teamScore,
           fugitivesCaught: gameState.caughtFugitives.size,
           totalFugitives: gameState.fugitives.length,
         })
@@ -806,6 +832,15 @@ wss.on("connection", (ws, req) => {
           if (!gameState.gameStarted) {
             gameState.gameStarted = true;
             gameState.gameStartTime = Date.now();
+            // Reset all chaser stats when game starts
+            gameState.players.forEach((player, playerId) => {
+              if (player.connected && player.type === "chaser") {
+                player.stats.chaserScore = 0;
+                player.stats.catches = 0;
+                player.stats.catchScores = [];
+                player.stats.totalCaptureTime = 0;
+              }
+            });
             gameState.caughtFugitives.clear();
             broadcast({ type: "gameStarted" });
           }
@@ -854,8 +889,10 @@ function handleJoin(ws, playerId, data) {
   // If this player was already controlling a character, free up their old color now that the new join is valid
   const existing = gameState.players.get(playerId);
   let playerStats = {
-    chaserScore: 0, // Number of catches (points)
+    chaserScore: 0, // Team score (shared by all chasers)
     catches: 0, // Number of times chaser caught fugitive
+    catchScores: [], // Array of individual catch scores (for cumulative scoring)
+    totalCaptureTime: 0, // Total time spent catching all fugitives
   };
   if (existing) {
     // Normalize character type for availableColors lookup
@@ -873,6 +910,10 @@ function handleJoin(ws, playerId, data) {
     // Preserve stats when switching characters
     if (existing.stats) {
       playerStats = existing.stats;
+      // Ensure catchScores array exists
+      if (!playerStats.catchScores) {
+        playerStats.catchScores = [];
+      }
     }
   }
 

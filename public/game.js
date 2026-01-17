@@ -357,7 +357,8 @@ function handleServerMessage(data) {
       updateScoreDisplay();
       break;
     case "fugitiveCaught":
-      // A fugitive was caught - could show visual feedback here
+      // A fugitive was caught - update score display
+      updateScoreDisplay();
       break;
     case "gameReset":
       // Game was reset - clear caught state and player selection
@@ -365,6 +366,11 @@ function handleServerMessage(data) {
       // Reset speed settings to defaults
       guiParams.fugitiveSpeed = 0.4;
       guiParams.chaserSpeed = 0.41;
+      // Reset display values
+      if (window.guiParams) {
+        window.guiParams.currentFugitiveSpeed = 0.4;
+        window.guiParams.currentAISkill = aiDifficulty;
+      }
       // Update GUI controllers if they exist
       if (window.fugitiveSpeedController) window.fugitiveSpeedController.setValue(0.4);
       if (window.chaserSpeedController) window.chaserSpeedController.setValue(0.41);
@@ -482,14 +488,41 @@ function applyServerPositions(positions) {
     }
   });
 
+  // Update display-only fugitive speed and AI skill
+  // Update current fugitive speed display
+  if (window.guiParams) {
+    window.guiParams.currentFugitiveSpeed = guiParams.fugitiveSpeed;
+  }
+
+  // Check if only 1 fugitive is left - if so, set AI skill to max (1.0)
+  const activeFugitiveCount = activeFugitiveIndices.size;
+  if (activeFugitiveCount === 1 && gameStarted) {
+    // Set AI skill to max when only 1 fugitive remains
+    aiDifficulty = 1.0;
+    if (window.guiParams) {
+      window.guiParams.currentAISkill = 1.0;
+    }
+  } else {
+    // Otherwise use the current difficulty setting
+    if (window.guiParams) {
+      window.guiParams.currentAISkill = aiDifficulty;
+    }
+  }
+
   // Track which chaser indices are currently active
   const activeChaserIndices = new Set();
+  // Track player-controlled chasers
+  const playerControlledChaserIndices = new Set();
   
   if (positions.ghosts && Array.isArray(positions.ghosts)) {
     for (let index = 0; index < positions.ghosts.length; index++) {
       const pos = positions.ghosts[index];
       if (ghosts[index] && pos) {
         activeChaserIndices.add(index);
+        // Track player-controlled chasers
+        if (pos.isPlayerControlled === true) {
+          playerControlledChaserIndices.add(index);
+        }
         // Always update pixel positions directly from server (no interpolation for server updates)
         if (pos.px !== undefined) ghosts[index].px = pos.px;
         if (pos.py !== undefined) ghosts[index].py = pos.py;
@@ -523,6 +556,10 @@ function applyServerPositions(positions) {
       const index = pos.index !== undefined ? pos.index : positions.chasers.indexOf(pos);
       if (ghosts[index] && pos) {
         activeChaserIndices.add(index);
+        // Track player-controlled chasers
+        if (pos.isPlayerControlled === true) {
+          playerControlledChaserIndices.add(index);
+        }
         // Always update pixel positions directly from server
         if (pos.px !== undefined) ghosts[index].px = pos.px;
         if (pos.py !== undefined) ghosts[index].py = pos.py;
@@ -545,6 +582,33 @@ function applyServerPositions(positions) {
         }
       }
     });
+  }
+  
+  // Check if there are more than 1 player-controlled chaser - if so, set chaser speed to 0.4
+  // Also check connectedPlayers map and local player for accurate count
+  connectedPlayers.forEach((player) => {
+    if ((player.type === "chaser" || player.type === "ghost") && player.colorIndex !== null && player.colorIndex !== undefined) {
+      playerControlledChaserIndices.add(player.colorIndex);
+    }
+  });
+  // Also check if local player is a chaser (might not be in positions yet)
+  if ((myCharacterType === "chaser" || myCharacterType === "ghost") && myColorIndex !== null) {
+    playerControlledChaserIndices.add(myColorIndex);
+  }
+  const totalChaserCount = playerControlledChaserIndices.size;
+  
+  if (totalChaserCount > 1 && gameStarted) {
+    // Set chaser speed to 0.4 when there are more than 1 chaser
+    const targetChaserSpeed = 0.4;
+    if (Math.abs(guiParams.chaserSpeed - targetChaserSpeed) > 0.001) {
+      guiParams.chaserSpeed = targetChaserSpeed;
+      // Update GUI slider
+      if (window.chaserSpeedController) {
+        window.chaserSpeedController.setValue(targetChaserSpeed);
+      }
+      // Send speed config to server
+      sendSpeedConfig(guiParams.fugitiveSpeed, targetChaserSpeed);
+    }
   }
   
   // Ensure all chasers are visible (create missing ones if needed)
@@ -669,12 +733,28 @@ function sendInput(input) {
 
 // Update GUI with available colors from server
 function updateScoreDisplay() {
-  if (!window.scoreDisplay || !myPlayerId) return;
+  if (!window.scoreDisplay) return;
 
-  const myPlayer = connectedPlayers.get(myPlayerId);
-  if (myPlayer && myPlayer.stats) {
-    window.scoreDisplay.chaserScore.setValue(myPlayer.stats.chaserScore || 0);
+  // Find the team chaser score (should be the same for all chasers)
+  let teamChaserScore = 0;
+  
+  // Check all connected chaser players to get the team score
+  connectedPlayers.forEach((player) => {
+    if ((player.type === "chaser" || player.type === "ghost") && player.stats) {
+      teamChaserScore = player.stats.chaserScore || 0;
+    }
+  });
+
+  // If we're a chaser, also check our own stats
+  if (myPlayerId) {
+    const myPlayer = connectedPlayers.get(myPlayerId);
+    if (myPlayer && (myPlayer.type === "chaser" || myPlayer.type === "ghost") && myPlayer.stats) {
+      teamChaserScore = myPlayer.stats.chaserScore || 0;
+    }
   }
+
+  // Update the display with the team score
+  window.scoreDisplay.chaserScore.setValue(teamChaserScore);
 }
 
 // Debug display functions
@@ -1004,6 +1084,8 @@ function init() {
       difficulty: 0.8,
       fugitiveSpeed: 0.4,
       chaserSpeed: 0.41, // Slightly faster than fugitives
+      currentFugitiveSpeed: 0.4, // Display-only: current fugitive speed
+      currentAISkill: 0.8, // Display-only: current AI skill
       gameDuration: 90, // Game duration in seconds
       playerInitials: "ABC", // 3-letter initials
       showDebug: false, // Show debug information
@@ -1342,7 +1424,35 @@ function init() {
       .name("AI Skill")
       .onChange((value) => {
         aiDifficulty = value;
+        // Update display (unless only 1 fugitive is left, then it stays at max)
+        if (window.guiParams) {
+          // Check active fugitive count - if only 1 left, keep it at max
+          const activeCount = pacmen.filter((f, i) => {
+            return f && f.element && f.element.style.display !== "none";
+          }).length;
+          if (activeCount === 1 && gameStarted) {
+            window.guiParams.currentAISkill = 1.0;
+          } else {
+            window.guiParams.currentAISkill = value;
+          }
+        }
       });
+
+    // Display-only: Current Fugitive Speed
+    const currentFugitiveSpeedDisplay = charactersFolder
+      .add(guiParams, "currentFugitiveSpeed")
+      .name("Current Fugitive Speed")
+      .listen();
+    currentFugitiveSpeedDisplay.domElement.querySelector("input").disabled = true;
+    window.currentFugitiveSpeedDisplay = currentFugitiveSpeedDisplay;
+
+    // Display-only: Current AI Skill
+    const currentAISkillDisplay = charactersFolder
+      .add(guiParams, "currentAISkill")
+      .name("Current AI Skill")
+      .listen();
+    currentAISkillDisplay.domElement.querySelector("input").disabled = true;
+    window.currentAISkillDisplay = currentAISkillDisplay;
 
     // Global speed controls
     const fugitiveSpeedCtrl =     charactersFolder
@@ -1350,6 +1460,10 @@ function init() {
       .name("Fugitive Speed")
       .onChange((value) => {
         sendSpeedConfig(value, guiParams.chaserSpeed);
+        // Update display
+        if (window.guiParams) {
+          window.guiParams.currentFugitiveSpeed = value;
+        }
       });
     window.fugitiveSpeedController = fugitiveSpeedCtrl;
 
@@ -1473,9 +1587,9 @@ function init() {
         });
     });
 
-    // Score display
+    // Score display (team score - same for all chasers)
     window.scoreDisplay = {
-      chaserScore: charactersFolder.add({ value: 0 }, "value").name("Chaser Score").disable(),
+      chaserScore: charactersFolder.add({ value: 0 }, "value").name("Chaser Team Score").disable(),
     };
 
     // Apply team images to existing characters after GUI is initialized
