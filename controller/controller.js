@@ -25,9 +25,8 @@ function getServerFromURL() {
     }
   }
   
-  // Default: use local if on localhost, otherwise remote
-  const isLocalhost = window.location.hostname === "localhost" || window.location.hostname === "127.0.0.1";
-  return isLocalhost ? LOCAL_SERVER_ADDRESS : REMOTE_SERVER_ADDRESS;
+  // Default: use remote server
+  return REMOTE_SERVER_ADDRESS;
 }
 
 // Key to direction mapping
@@ -167,6 +166,18 @@ function handleServerMessage(data) {
       gameStarted = false;
       updateUI();
       elements.chaserSelect?.classList.remove("game-started");
+      break;
+    case "gameEnd":
+      // Game ended - show alert with score if all fugitives were caught
+      if (data.allCaught && myColorIndex !== null) {
+        const timeSeconds = (data.gameTime / 1000).toFixed(1);
+        const message = `All Fugitives Caught!\n\nTime: ${timeSeconds}s\nTotal Score: ${data.score}\nFugitives Caught: ${data.fugitivesCaught}/${data.totalFugitives}`;
+        alert(message);
+        // Reload page after alert
+        setTimeout(() => {
+          window.location.reload();
+        }, 100);
+      }
       break;
     case "gameReset":
       gameStarted = false;

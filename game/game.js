@@ -138,9 +138,8 @@ function getServerFromURL() {
     }
   }
   
-  // Default: use local if on localhost, otherwise remote
-  const isLocalhost = window.location.hostname === "localhost" || window.location.hostname === "127.0.0.1";
-  return isLocalhost ? LOCAL_SERVER_ADDRESS : REMOTE_SERVER_ADDRESS;
+  // Default: use remote server
+  return REMOTE_SERVER_ADDRESS;
 }
 
 function getServerAddress() {
@@ -1129,10 +1128,6 @@ function init() {
       buildingRealY: 9, // Building real image Y position offset (px)
       buildingRealBlendMode: "soft-light", // Building real image blend mode
       mazeOpacity: 1.0, // Maze opacity (0-1)
-      redColor: "#ff0000", // Red color override
-      greenColor: "#00ff00", // Green color override
-      blueColor: "#0000ff", // Blue color override
-      yellowColor: "#ffff00", // Yellow color override
       startGameCycle: () => startGame(),
       resetGameCycle: () => restartGame(),
       joinQueue: () => joinQueue(),
@@ -1521,55 +1516,6 @@ function init() {
       window.characterControllers.ghost[i] = chaserCtrl;
     }
 
-    // Create Team Settings folder for color controls only (images are loaded from JSON)
-    const teamSettingsFolder = gui.addFolder("Team Settings");
-    teamSettingsFolder.close(); // Closed by default
-
-    // Color controls for each team (Team 1, Team 2, Team 3, Team 4)
-    COLORS.forEach((colorName, colorIndex) => {
-      const colorKey = `${colorName}Color`;
-      const teamNumber = colorIndex + 1;
-      const displayName = `Team ${teamNumber} Color`;
-
-      const defaultColors = ["#ff0000", "#00ff00", "#0000ff", "#ffff00"];
-      const colorCtrl = teamSettingsFolder
-        .addColor(guiParams, colorKey)
-        .name(displayName)
-        .onChange((value) => {
-          // Check if value is the default color (means user wants to use default)
-          const isDefault = value === defaultColors[colorIndex];
-
-          // Update 3D characters of this color (both fugitive and chaser)
-          if (view3D && window.render3D && window.render3D.setColorOverride) {
-            window.render3D.setColorOverride(colorIndex, isDefault ? null : value);
-          }
-
-          // Update 2D fugitive of this color
-          if (pacmen[colorIndex] && pacmen[colorIndex].element) {
-            if (isDefault) {
-              // Reset to default color
-              updateCharacterAppearance(pacmen[colorIndex]);
-            } else {
-              pacmen[colorIndex].element.style.background = value;
-              pacmen[colorIndex].element.style.borderColor = value;
-              // Remove predefined color classes
-              COLORS.forEach((c) => pacmen[colorIndex].element.classList.remove(c));
-            }
-          }
-
-          // Update 2D chaser of this color
-          if (ghosts[colorIndex] && ghosts[colorIndex].element) {
-            if (isDefault) {
-              // Reset to default color
-              updateCharacterAppearance(ghosts[colorIndex]);
-            } else {
-              ghosts[colorIndex].element.style.borderColor = value;
-              // Remove predefined color classes
-              COLORS.forEach((c) => ghosts[colorIndex].element.classList.remove(c));
-            }
-          }
-        });
-    });
 
     // Score display (team score - same for all chasers)
     window.scoreDisplay = {
