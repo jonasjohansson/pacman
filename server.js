@@ -93,6 +93,7 @@ const gameState = {
   firstPlayerId: null, // Player ID who started the game
   firstPlayerName: null, // Name of player who started the game
   isTeamGame: false, // Whether multiple chasers are playing
+  chaserSelections: new Map(), // colorIndex -> { playerId, playerName } - tracks selections before joining
 };
 
 // Debug counters
@@ -881,6 +882,9 @@ wss.on("connection", (ws, req) => {
     try {
       const data = JSON.parse(message.toString());
       switch (data.type) {
+        case "selectChaser":
+          handleSelectChaser(ws, playerId, data);
+          break;
         case "join":
           handleJoin(ws, playerId, data);
           break;
@@ -1045,7 +1049,48 @@ function handleJoin(ws, playerId, data) {
     availableColors.splice(colorIdx, 1);
   }
 
-  ws.send(JSON.stringify({ type: "joined", playerId: playerId, characterType: characterType, colorIndex: colorIndex }));
+  ws.send(JSON.stringify({ type: "joined", playerId: playerId, characterType: characterType, colorIndex: colorIndex, playerName: playerName }));
+  
+  // Remove selection when player actually joins
+  if (gameState.chaserSelections && gameState.chaserSelections.has(colorIndex)) {
+    const selection = gameState.chaserSelections.get(colorIndex);
+    if (selection.playerId === playerId) {
+      gameState.chaserSelections.delete(colorIndex);
+    }
+  }
+  
+  broadcastGameState();
+}
+
+function handleSelectChaser(ws, playerId, data) {
+  const { colorIndex, playerName } = data;
+  
+  // Check if this chaser slot is available
+  const availableColors = gameState.availableColors.chaser;
+  if (!availableColors || !availableColors.includes(colorIndex)) {
+    ws.send(JSON.stringify({ type: "selectChaserFailed", reason: "Chaser slot not available" }));
+    return;
+  }
+  
+  // Remove any previous selection by this player
+  if (gameState.chaserSelections) {
+    gameState.chaserSelections.forEach((selection, idx) => {
+      if (selection.playerId === playerId) {
+        gameState.chaserSelections.delete(idx);
+      }
+    });
+  }
+  
+  // Add new selection
+  if (!gameState.chaserSelections) {
+    gameState.chaserSelections = new Map();
+  }
+  gameState.chaserSelections.set(colorIndex, {
+    playerId: playerId,
+    playerName: playerName || "AI"
+  });
+  
+  // Broadcast the selection to all players
   broadcastGameState();
 }
 
@@ -1088,6 +1133,15 @@ function handleInput(playerId, data) {
 // Rounds system removed - not used
 
 function handleDisconnect(playerId) {
+  // Remove any chaser selections by this player
+  if (gameState.chaserSelections) {
+    gameState.chaserSelections.forEach((selection, idx) => {
+      if (selection.playerId === playerId) {
+        gameState.chaserSelections.delete(idx);
+      }
+    });
+  }
+  
   const player = gameState.players.get(playerId);
   if (player) {
     // Check if this is the last chaser player (before removing them)
@@ -1192,6 +1246,16 @@ function sendGameState(ws) {
     });
   }
 
+  // Build chaser selections map
+  const chaserSelections = {};
+  if (gameState.chaserSelections) {
+    gameState.chaserSelections.forEach((selection, colorIndex) => {
+      chaserSelections[colorIndex] = {
+        playerName: selection.playerName
+      };
+    });
+  }
+
   ws.send(
     JSON.stringify({
       type: "gameState",
@@ -1203,6 +1267,7 @@ function sendGameState(ws) {
         pacman: gameState.availableColors.fugitive,
         ghost: gameState.availableColors.chaser,
       },
+      chaserSelections: chaserSelections, // Selections before joining
       gameStarted: gameState.gameStarted,
       positions: {
         fugitives: fugitivePositions,
@@ -1270,6 +1335,16 @@ function broadcastGameState() {
     });
   }
 
+  // Build chaser selections map
+  const chaserSelections = {};
+  if (gameState.chaserSelections) {
+    gameState.chaserSelections.forEach((selection, colorIndex) => {
+      chaserSelections[colorIndex] = {
+        playerName: selection.playerName
+      };
+    });
+  }
+
   broadcast({
     type: "gameState",
     players: players,
@@ -1280,6 +1355,7 @@ function broadcastGameState() {
       pacman: gameState.availableColors.fugitive,
       ghost: gameState.availableColors.chaser,
     },
+    chaserSelections: chaserSelections, // Selections before joining
     gameStarted: gameState.gameStarted,
     positions: {
       fugitives: fugitivePositions,
