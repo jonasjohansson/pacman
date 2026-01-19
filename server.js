@@ -466,14 +466,35 @@ function endGame(allCaught) {
   let playerNames = gameState.firstPlayerName || "Unknown";
   if (gameState.isTeamGame) {
     const chaserNames = [];
+    const firstPlayerName = gameState.firstPlayerName;
+    
     gameState.players.forEach((player, playerId) => {
       if (player.connected && player.type === "chaser" && player.playerName) {
         chaserNames.push(player.playerName);
       }
     });
-    // If we have multiple chasers, join their names with commas
+    
+    // If we have multiple chasers, prioritize first player's name, then others with commas
     if (chaserNames.length > 1) {
-      playerNames = chaserNames.join(", ");
+      // Separate first player from others
+      const firstPlayerIndex = chaserNames.findIndex(name => name === firstPlayerName);
+      let orderedNames = [];
+      
+      if (firstPlayerIndex !== -1) {
+        // First player's name first
+        orderedNames.push(chaserNames[firstPlayerIndex]);
+        // Then add other players' names
+        chaserNames.forEach((name, index) => {
+          if (index !== firstPlayerIndex) {
+            orderedNames.push(name);
+          }
+        });
+      } else {
+        // If first player name not found, use original order
+        orderedNames = chaserNames;
+      }
+      
+      playerNames = orderedNames.join(", ");
     } else if (chaserNames.length === 1) {
       playerNames = chaserNames[0];
     }
