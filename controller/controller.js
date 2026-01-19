@@ -180,6 +180,7 @@ function handleServerMessage(data) {
       updateUI();
       updateChaserButtons();
       updateStartButton();
+      updateJoystickState();
       
       // If we were trying to start the game, do it now that we're joined
       if (pendingStartGame && !gameStarted && ws?.readyState === WebSocket.OPEN) {
@@ -315,6 +316,7 @@ function handleServerMessage(data) {
       // Only update start button if relevant state changed
       if (myColorIndexChanged || gameStartedChanged || selectedChaserIndexChanged) {
         updateStartButton();
+        updateJoystickState();
       }
       break;
     case "gameStarted":
@@ -324,6 +326,7 @@ function handleServerMessage(data) {
       elements.chaserSelect?.classList.add("game-started");
       updateStartButton();
       updateChaserButtons();
+      updateJoystickState();
       // Request latest game state to get updated available chasers
       if (ws && ws.readyState === WebSocket.OPEN) {
         ws.send(JSON.stringify({ type: "gameState" }));
@@ -337,8 +340,9 @@ function handleServerMessage(data) {
       // Reset welcome message
       const welcomeMsgRestart = document.getElementById("welcome-message");
       if (welcomeMsgRestart) {
-        welcomeMsgRestart.textContent = "Welcome to the Jagad game, play alone or up to 4 players. Your goal is to catch the Jagad fugitives as fast as possible. Click 'Play' to join. If a game is already playing, you can join, or wait until it's over to start a new game. Each game is 90 seconds.";
+        welcomeMsgRestart.textContent = "Welcome to the Jagad game, play alone or up to 4 players. Your goal is to catch the Jagad fugitives as fast as possible. Click 'Play' to join. If a game is already playing, you can join, or wait until it's over to start a new game. Each game is 90 seconds. Use the joystick to control your chaser: move left, right, up, and down.";
       }
+      updateJoystickState();
       break;
     case "gameEnd":
       // Game ended - show alert with score and reload page
@@ -398,8 +402,9 @@ function handleServerMessage(data) {
       // Reset welcome message
       const welcomeMsg = document.getElementById("welcome-message");
       if (welcomeMsg) {
-        welcomeMsg.textContent = "Welcome to the Jagad game, play alone or up to 4 players. Your goal is to catch the Jagad fugitives as fast as possible. Click 'Play' to join. If a game is already playing, you can join, or wait until it's over to start a new game. Each game is 90 seconds.";
+        welcomeMsg.textContent = "Welcome to the Jagad game, play alone or up to 4 players. Your goal is to catch the Jagad fugitives as fast as possible. Click 'Play' to join. If a game is already playing, you can join, or wait until it's over to start a new game. Each game is 90 seconds. Use the joystick to control your chaser: move left, right, up, and down.";
       }
+      updateJoystickState();
       break;
     default:
       // Log any unhandled message types for debugging
@@ -413,6 +418,18 @@ function handleServerMessage(data) {
 // UI Updates
 function updateUI() {
   updateStartButton();
+  updateJoystickState();
+}
+
+function updateJoystickState() {
+  // Enable joystick only if player has joined and game has started
+  if (elements.joystickContainer) {
+    if (myColorIndex !== null && gameStarted) {
+      elements.joystickContainer.classList.remove("disabled");
+    } else {
+      elements.joystickContainer.classList.add("disabled");
+    }
+  }
 }
 
 function updateChaserButtons() {
@@ -458,7 +475,7 @@ function updateStartButton() {
     // Reset welcome message
     const welcomeMsg = document.getElementById("welcome-message");
     if (welcomeMsg) {
-      welcomeMsg.textContent = "Welcome to the Jagad game, play alone or up to 4 players. Your goal is to catch the Jagad fugitives as fast as possible. Click 'Play' to join. If a game is already playing, you can join, or wait until it's over to start a new game. Each game is 90 seconds.";
+      welcomeMsg.textContent = "Welcome to the Jagad game, play alone or up to 4 players. Your goal is to catch the Jagad fugitives as fast as possible. Click 'Play' to join. If a game is already playing, you can join, or wait until it's over to start a new game. Each game is 90 seconds. Use the joystick to control your chaser: move left, right, up, and down.";
     }
   }
 }
@@ -535,6 +552,7 @@ function initElements() {
   elements = {
     joystickBase: document.getElementById("joystick-base"),
     joystickHandle: document.getElementById("joystick-handle"),
+    joystickContainer: document.getElementById("joystick-container"),
     chaserButtons: document.querySelectorAll(".chaser-btn[data-index]"),
     startBtn: document.getElementById("start-btn"),
     chaserSelect: document.getElementById("chaser-select"),
