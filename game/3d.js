@@ -15,7 +15,7 @@ const COLORS = ["red", "green", "blue", "yellow"];
 let scene, camera, renderer;
 let orthographicCamera, perspectiveCamera;
 let useOrthographic = true; // Default to orthographic
-let cameraZoom = 1.45; // Camera zoom level
+let cameraZoom = 1.2; // Camera zoom level
 let baseViewSize = 0; // Base view size (calculated on init)
 let fugitives3D = [];
 let chasers3D = [];
@@ -559,14 +559,7 @@ function updatePositions3D(positions) {
 function onWindowResize3D() {
   if (!camera || !renderer) return;
 
-  const canvas = document.getElementById("webgl-canvas");
-  if (!canvas) return;
-  
-  // Canvas is positioned absolutely and sized to match game dimensions
-  // Use the actual canvas dimensions (which match the game size)
-  const canvasWidth = canvas.clientWidth || (COLS * CELL_SIZE);
-  const canvasHeight = canvas.clientHeight || (ROWS * CELL_SIZE);
-  const aspect = canvasWidth / canvasHeight;
+  const aspect = window.innerWidth / window.innerHeight;
 
   if (useOrthographic && orthographicCamera) {
     // Update orthographic camera bounds
@@ -589,7 +582,7 @@ function onWindowResize3D() {
     perspectiveCamera.updateProjectionMatrix();
   }
 
-  renderer.setSize(canvasWidth, canvasHeight);
+  renderer.setSize(window.innerWidth, window.innerHeight);
 }
 
 function setCameraZoom(zoom) {
