@@ -1,4 +1,4 @@
-// Shared map configuration for Pacman game
+// Shared map configuration for Jagad game
 // Map: 0 = path, 1 = wall, 2 = teleport, 3 = chaser spawn, 4 = fugitive spawn
 // Spawn order (red, green, blue, yellow): top-left, top-right, bottom-left, bottom-right
 // This file is used by both the browser client (game.js) and the Node server (server.js).
@@ -9,7 +9,7 @@
     module.exports = factory();
   } else {
     // Browser - attach to global
-    root.PACMAN_MAP = factory();
+    root.PACMAN_MAP = factory(); // Keep name for backward compatibility
   }
 })(typeof self !== "undefined" ? self : this, function () {
   const MAP = [

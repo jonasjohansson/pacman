@@ -82,19 +82,39 @@ function handleServerMessage(data) {
   }
 }
 
+// Cache DOM elements
+let cachedElements = null;
+
+function getCachedElements() {
+  if (!cachedElements) {
+    cachedElements = {
+      startBtn: document.getElementById("start-game-btn"),
+      endBtn: document.getElementById("end-game-btn"),
+      resetBtn: document.getElementById("reset-game-btn"),
+      aiSkillInput: document.getElementById("ai-skill"),
+      aiSkillValue: document.getElementById("ai-skill-value"),
+      fugitiveSpeedInput: document.getElementById("fugitive-speed"),
+      fugitiveSpeedValue: document.getElementById("fugitive-speed-value"),
+      chaserSpeedInput: document.getElementById("chaser-speed"),
+      chaserSpeedValue: document.getElementById("chaser-speed-value"),
+      gameDurationInput: document.getElementById("game-duration"),
+      gameDurationValue: document.getElementById("game-duration-value"),
+    };
+  }
+  return cachedElements;
+}
+
 function updateButtonStates() {
-  const startBtn = document.getElementById("start-game-btn");
-  const endBtn = document.getElementById("end-game-btn");
-  const resetBtn = document.getElementById("reset-game-btn");
+  const elements = getCachedElements();
   
   if (gameStarted) {
-    startBtn.disabled = true;
-    endBtn.disabled = false;
-    resetBtn.disabled = true;
+    elements.startBtn.disabled = true;
+    elements.endBtn.disabled = false;
+    elements.resetBtn.disabled = true;
   } else {
-    startBtn.disabled = false;
-    endBtn.disabled = true;
-    resetBtn.disabled = false;
+    elements.startBtn.disabled = false;
+    elements.endBtn.disabled = true;
+    elements.resetBtn.disabled = false;
   }
 }
 
@@ -130,8 +150,6 @@ function sendSpeedConfig(fugitiveSpeed, chaserSpeed) {
       type: "setSpeeds",
       fugitiveSpeed,
       chaserSpeed,
-      pacmanSpeed: fugitiveSpeed,
-      ghostSpeed: chaserSpeed,
     }));
   }
 }
@@ -146,41 +164,35 @@ function sendGameDuration(duration) {
 
 // Initialize event listeners
 document.addEventListener("DOMContentLoaded", () => {
+  const elements = getCachedElements();
+  
   // Game control buttons
-  document.getElementById("start-game-btn").addEventListener("click", startGame);
-  document.getElementById("end-game-btn").addEventListener("click", endGame);
-  document.getElementById("reset-game-btn").addEventListener("click", resetGame);
+  elements.startBtn.addEventListener("click", startGame);
+  elements.endBtn.addEventListener("click", endGame);
+  elements.resetBtn.addEventListener("click", resetGame);
   
   // Game settings
-  const aiSkillInput = document.getElementById("ai-skill");
-  const aiSkillValue = document.getElementById("ai-skill-value");
-  aiSkillInput.addEventListener("input", (e) => {
+  elements.aiSkillInput.addEventListener("input", (e) => {
     const value = parseFloat(e.target.value);
-    aiSkillValue.textContent = value.toFixed(1);
+    elements.aiSkillValue.textContent = value.toFixed(1);
     sendAIDifficulty(value);
   });
   
-  const fugitiveSpeedInput = document.getElementById("fugitive-speed");
-  const fugitiveSpeedValue = document.getElementById("fugitive-speed-value");
-  fugitiveSpeedInput.addEventListener("input", (e) => {
+  elements.fugitiveSpeedInput.addEventListener("input", (e) => {
     const value = parseFloat(e.target.value);
-    fugitiveSpeedValue.textContent = value.toFixed(2);
-    sendSpeedConfig(value, parseFloat(document.getElementById("chaser-speed").value));
+    elements.fugitiveSpeedValue.textContent = value.toFixed(2);
+    sendSpeedConfig(value, parseFloat(elements.chaserSpeedInput.value));
   });
   
-  const chaserSpeedInput = document.getElementById("chaser-speed");
-  const chaserSpeedValue = document.getElementById("chaser-speed-value");
-  chaserSpeedInput.addEventListener("input", (e) => {
+  elements.chaserSpeedInput.addEventListener("input", (e) => {
     const value = parseFloat(e.target.value);
-    chaserSpeedValue.textContent = value.toFixed(2);
-    sendSpeedConfig(parseFloat(document.getElementById("fugitive-speed").value), value);
+    elements.chaserSpeedValue.textContent = value.toFixed(2);
+    sendSpeedConfig(parseFloat(elements.fugitiveSpeedInput.value), value);
   });
   
-  const gameDurationInput = document.getElementById("game-duration");
-  const gameDurationValue = document.getElementById("game-duration-value");
-  gameDurationInput.addEventListener("input", (e) => {
+  elements.gameDurationInput.addEventListener("input", (e) => {
     const value = parseInt(e.target.value);
-    gameDurationValue.textContent = value;
+    elements.gameDurationValue.textContent = value;
     sendGameDuration(value);
   });
   

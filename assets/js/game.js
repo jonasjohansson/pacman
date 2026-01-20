@@ -1,4 +1,4 @@
-// Simple Pacman Game
+// Jagad Game
 // Map and grid dimensions are shared via PACMAN_MAP (see map.js)
 const { MAP, COLS, ROWS, TUNNEL_ROW } = PACMAN_MAP;
 const CELL_SIZE = 20;
@@ -32,24 +32,24 @@ for (let y = 0; y < ROWS; y++) {
   }
 }
 
-// Pre-calculate ghost spawn positions
-const ghostSpawnPositions = [];
+// Pre-calculate chaser spawn positions
+const chaserSpawnPositions = [];
 for (let y = 0; y < ROWS; y++) {
   for (let x = 0; x < COLS; x++) {
     if (MAP[y][x] === 3) {
-      ghostSpawnPositions.push({ x, y });
+      chaserSpawnPositions.push({ x, y });
     }
   }
 }
 // Sort spawn positions to match server order: red, green, blue, yellow
 // Order: top-left, top-right, bottom-left, bottom-right
-ghostSpawnPositions.sort((a, b) => {
+chaserSpawnPositions.sort((a, b) => {
   if (a.y !== b.y) return a.y - b.y; // Sort by row first (top to bottom)
   return a.x - b.x; // Then by column (left to right)
 });
 
-// Pre-calculate pacman spawn positions
-const pacmanSpawnPositions = [
+// Pre-calculate fugitive spawn positions
+const fugitiveSpawnPositions = [
   { x: 1, y: 1 }, // top-left
   { x: 30, y: 1 }, // top-right
   { x: 1, y: 14 }, // bottom-left
@@ -78,22 +78,22 @@ function respawnCharacter(character, spawnPos) {
   character.py = spawnPos.y * CELL_SIZE + CHARACTER_OFFSET;
   character.targetX = spawnPos.x;
   character.targetY = spawnPos.y;
-  updatePosition(character.element, character.px, character.py);
+  // Position updates handled in 3D rendering
 }
 
-function respawnGhost(ghost, spawnPos) {
-  respawnCharacter(ghost, spawnPos);
-  ghost.positionHistory = [];
-  ghost.lastDirX = 0;
-  ghost.lastDirY = 0;
+function respawnChaser(chaser, spawnPos) {
+  respawnCharacter(chaser, spawnPos);
+  chaser.positionHistory = [];
+  chaser.lastDirX = 0;
+  chaser.lastDirY = 0;
 }
 
 // Game state
-let pacmen = [];
-let ghosts = [];
-let currentPacman = null; // null means no character selected
-let currentGhost = null; // null means no character selected
-let playerType = "pacman"; // "pacman" or "ghost"
+let fugitives = [];
+let chasers = [];
+let currentFugitive = null; // null means no character selected
+let currentChaser = null; // null means no character selected
+let playerType = "fugitive"; // "fugitive" or "chaser"
 let aiDifficulty = 0.8; // 0 = easy, 1 = hard
 // Removed: survivalTimeThreshold - not used in new game mode
 let gameStarted = false;
@@ -108,7 +108,7 @@ const REMOTE_SERVER_ADDRESS = "https://pacman-server-239p.onrender.com";
 const LOCAL_SERVER_ADDRESS = "http://localhost:3000";
 let ws = null;
 let myPlayerId = null;
-let myCharacterType = null; // 'pacman' or 'ghost'
+let myCharacterType = null; // 'fugitive' or 'chaser'
 let myColorIndex = null;
 // Expose to window for 3D rendering to access
 window.myCharacterType = myCharacterType;
@@ -179,21 +179,18 @@ function selectCharacter(type, colorName) {
   const colorIndex = COLORS.indexOf(colorName.toLowerCase());
   if (colorIndex === -1) return;
 
-  // Remove selected class from all characters
-  [...pacmen, ...ghosts].forEach((char) => {
-    if (char?.element) char.element.classList.remove("selected");
-  });
+  // Selection is handled in 3D rendering - no DOM manipulation needed
 
-  if (type === "pacman" && pacmen[colorIndex]) {
-    currentPacman = colorIndex;
-    currentGhost = null;
-    playerType = "pacman";
-    pacmen[colorIndex].element?.classList.add("selected");
-  } else if (type === "ghost" && ghosts[colorIndex]) {
-    currentGhost = colorIndex;
-    currentPacman = null;
-    playerType = "ghost";
-    ghosts[colorIndex].element?.classList.add("selected");
+  if (type === "fugitive" && fugitives[colorIndex]) {
+    currentFugitive = colorIndex;
+    currentChaser = null;
+    playerType = "fugitive";
+    // Selection handled in 3D rendering
+  } else if (type === "chaser" && chasers[colorIndex]) {
+    currentChaser = colorIndex;
+    currentFugitive = null;
+    playerType = "chaser";
+    // Selection handled in 3D rendering
   }
 }
 
@@ -297,12 +294,10 @@ function handleServerMessage(data) {
 
       // Auto-select the character we joined as so the GUI and local selection match the server
       // All chasers are white, so use white for selection
-      if (myCharacterType === "chaser" || myCharacterType === "ghost") {
-        selectCharacter("ghost", "white");
+      if (myCharacterType === "chaser") {
+        selectCharacter("chaser", "white");
         // Immediately update opacity to 100% for the chaser we joined
-        if (ghosts[newColorIndex] && ghosts[newColorIndex].element) {
-          ghosts[newColorIndex].element.style.opacity = "1";
-        }
+        // Opacity handled in 3D rendering
         // Also update 3D opacity
         if (window.render3D && window.render3D.updateChaserOpacity) {
           window.render3D.updateChaserOpacity(newColorIndex, 1.0);
@@ -408,10 +403,10 @@ function handleServerMessage(data) {
         updateScoreDisplay();
       }
       
-      // Update game code display
+      // Update game code display only if it changed
       if (data.gameCode) {
         const gameCodeDisplay = document.getElementById("game-code-display");
-        if (gameCodeDisplay) {
+        if (gameCodeDisplay && gameCodeDisplay.textContent !== data.gameCode) {
           gameCodeDisplay.textContent = data.gameCode;
         }
       }
@@ -500,18 +495,10 @@ function handleServerMessage(data) {
       myColorIndex = null;
       window.myCharacterType = null;
       window.myColorIndex = null;
-      // Clear visual selection
-      [...pacmen, ...ghosts].forEach((char) => {
-        if (char?.element) char.element.classList.remove("selected");
-      });
-      currentPacman = null;
-      currentGhost = null;
-      // Reset all chaser opacities to 20% (not player-controlled)
-      ghosts.forEach((ghost) => {
-        if (ghost && ghost.element) {
-          ghost.element.style.opacity = "0.2";
-        }
-      });
+      // Selection handled in 3D rendering
+      currentFugitive = null;
+      currentChaser = null;
+      // Opacity handled in 3D rendering
       // Also update 3D opacities
       if (window.render3D && window.render3D.updateChaserOpacity) {
         for (let i = 0; i < 4; i++) {
@@ -525,7 +512,7 @@ function handleServerMessage(data) {
 // Apply input from remote player
 function applyRemoteInput(data) {
   const { characterType, colorIndex, input } = data;
-  const character = characterType === "pacman" ? pacmen[colorIndex] : ghosts[colorIndex];
+  const character = characterType === "fugitive" ? fugitives[colorIndex] : chasers[colorIndex];
   if (character && input) {
     if (input.targetX !== undefined && input.targetY !== undefined) {
       character.targetX = input.targetX;
@@ -544,22 +531,22 @@ function applyServerPositions(positions) {
   const activeFugitiveIndices = new Set();
 
   // Apply positions from server for ALL characters (server is authoritative)
-  if (positions.pacmen && Array.isArray(positions.pacmen)) {
-    for (let index = 0; index < positions.pacmen.length; index++) {
-      const pos = positions.pacmen[index];
-      if (pacmen[index] && pos) {
+  if (positions.fugitives && Array.isArray(positions.fugitives)) {
+    for (let index = 0; index < positions.fugitives.length; index++) {
+      const pos = positions.fugitives[index];
+      if (fugitives[index] && pos) {
         activeFugitiveIndices.add(index);
         // Always update pixel positions directly from server (no interpolation for server updates)
-        if (pos.px !== undefined) pacmen[index].px = pos.px;
-        if (pos.py !== undefined) pacmen[index].py = pos.py;
+        if (pos.px !== undefined) fugitives[index].px = pos.px;
+        if (pos.py !== undefined) fugitives[index].py = pos.py;
 
         // Update target positions
-        if (pos.targetX !== undefined) pacmen[index].targetX = pos.targetX;
-        if (pos.targetY !== undefined) pacmen[index].targetY = pos.targetY;
+        if (pos.targetX !== undefined) fugitives[index].targetX = pos.targetX;
+        if (pos.targetY !== undefined) fugitives[index].targetY = pos.targetY;
 
         // Update grid positions
-        if (pos.x !== undefined) pacmen[index].x = pos.x;
-        if (pos.y !== undefined) pacmen[index].y = pos.y;
+        if (pos.x !== undefined) fugitives[index].x = pos.x;
+        if (pos.y !== undefined) fugitives[index].y = pos.y;
 
         // Do not update DOM here; renderLoop will interpolate and render
         // This avoids fighting between server updates and client-side smoothing
@@ -567,45 +554,7 @@ function applyServerPositions(positions) {
     }
   }
   
-  // Also check the new "fugitives" array name
-  if (positions.fugitives && Array.isArray(positions.fugitives)) {
-    for (let index = 0; index < positions.fugitives.length; index++) {
-      const pos = positions.fugitives[index];
-      if (pacmen[index] && pos) {
-        activeFugitiveIndices.add(index);
-        // Always update pixel positions directly from server (no interpolation for server updates)
-        if (pos.px !== undefined) pacmen[index].px = pos.px;
-        if (pos.py !== undefined) pacmen[index].py = pos.py;
-
-        // Update target positions
-        if (pos.targetX !== undefined) pacmen[index].targetX = pos.targetX;
-        if (pos.targetY !== undefined) pacmen[index].targetY = pos.targetY;
-
-        // Update grid positions
-        if (pos.x !== undefined) pacmen[index].x = pos.x;
-        if (pos.y !== undefined) pacmen[index].y = pos.y;
-      }
-    }
-  }
-  
-  // Remove/hide fugitives that are no longer active (caught and removed from game)
-  pacmen.forEach((fugitive, index) => {
-    if (fugitive && !activeFugitiveIndices.has(index)) {
-      // Hide the fugitive element (it's been caught and removed)
-      // Keep the color/appearance intact so it's preserved when shown again
-      if (fugitive.element) {
-        fugitive.element.style.display = "none";
-      }
-    } else if (fugitive && activeFugitiveIndices.has(index)) {
-      // Show the fugitive element if it's active again (after game reset)
-      // Restore appearance to ensure color is preserved
-      if (fugitive.element) {
-        fugitive.element.style.display = "";
-        // Restore appearance to ensure color and styling are preserved
-        updateCharacterAppearance(fugitive);
-      }
-    }
-  });
+    // Fugitive visibility is handled in 3D rendering
 
   // Update display-only fugitive speed and AI skill
   // Update current fugitive speed display
@@ -631,35 +580,28 @@ function applyServerPositions(positions) {
   // Track player-controlled chasers
   const playerControlledChaserIndices = new Set();
   
-  if (positions.ghosts && Array.isArray(positions.ghosts)) {
-    for (let index = 0; index < positions.ghosts.length; index++) {
-      const pos = positions.ghosts[index];
-      if (ghosts[index] && pos) {
+  if (positions.chasers && Array.isArray(positions.chasers)) {
+    for (let index = 0; index < positions.chasers.length; index++) {
+      const pos = positions.chasers[index];
+      if (chasers[index] && pos) {
         activeChaserIndices.add(index);
         // Track player-controlled chasers
         if (pos.isPlayerControlled === true) {
           playerControlledChaserIndices.add(index);
         }
         // Always update pixel positions directly from server (no interpolation for server updates)
-        if (pos.px !== undefined) ghosts[index].px = pos.px;
-        if (pos.py !== undefined) ghosts[index].py = pos.py;
+        if (pos.px !== undefined) chasers[index].px = pos.px;
+        if (pos.py !== undefined) chasers[index].py = pos.py;
 
         // Update target positions
-        if (pos.targetX !== undefined) ghosts[index].targetX = pos.targetX;
-        if (pos.targetY !== undefined) ghosts[index].targetY = pos.targetY;
+        if (pos.targetX !== undefined) chasers[index].targetX = pos.targetX;
+        if (pos.targetY !== undefined) chasers[index].targetY = pos.targetY;
 
         // Update grid positions
-        if (pos.x !== undefined) ghosts[index].x = pos.x;
-        if (pos.y !== undefined) ghosts[index].y = pos.y;
+        if (pos.x !== undefined) chasers[index].x = pos.x;
+        if (pos.y !== undefined) chasers[index].y = pos.y;
         
-        // Update opacity based on player control (20% if not controlled, 100% if controlled)
-        // Check both server flag and local player identity
-        if (ghosts[index].element) {
-          const isPlayerControlled = pos.isPlayerControlled === true;
-          const isMyChaser = (myCharacterType === "chaser" || myCharacterType === "ghost") && myColorIndex === index;
-          const shouldBeFullOpacity = isPlayerControlled || isMyChaser;
-          ghosts[index].element.style.opacity = shouldBeFullOpacity ? "1" : "0.2";
-        }
+        // Opacity is handled in 3D rendering
 
         // Do not update DOM here; renderLoop will interpolate and render
         // This avoids fighting between server updates and client-side smoothing
@@ -667,49 +609,15 @@ function applyServerPositions(positions) {
     }
   }
   
-  // Also check the new "chasers" array name
-  if (positions.chasers && Array.isArray(positions.chasers)) {
-    positions.chasers.forEach((pos) => {
-      const index = pos.index !== undefined ? pos.index : positions.chasers.indexOf(pos);
-      if (ghosts[index] && pos) {
-        activeChaserIndices.add(index);
-        // Track player-controlled chasers
-        if (pos.isPlayerControlled === true) {
-          playerControlledChaserIndices.add(index);
-        }
-        // Always update pixel positions directly from server
-        if (pos.px !== undefined) ghosts[index].px = pos.px;
-        if (pos.py !== undefined) ghosts[index].py = pos.py;
-
-        // Update target positions
-        if (pos.targetX !== undefined) ghosts[index].targetX = pos.targetX;
-        if (pos.targetY !== undefined) ghosts[index].targetY = pos.targetY;
-
-        // Update grid positions
-        if (pos.x !== undefined) ghosts[index].x = pos.x;
-        if (pos.y !== undefined) ghosts[index].y = pos.y;
-        
-        // Update opacity based on player control (20% if not controlled, 100% if controlled)
-        // Check both server flag and local player identity
-        if (ghosts[index].element) {
-          const isPlayerControlled = pos.isPlayerControlled === true;
-          const isMyChaser = (myCharacterType === "chaser" || myCharacterType === "ghost") && myColorIndex === index;
-          const shouldBeFullOpacity = isPlayerControlled || isMyChaser;
-          ghosts[index].element.style.opacity = shouldBeFullOpacity ? "1" : "0.2";
-        }
-      }
-    });
-  }
-  
   // Check if there are more than 1 player-controlled chaser - if so, set chaser speed to 0.4
   // Also check connectedPlayers map and local player for accurate count
   connectedPlayers.forEach((player) => {
-    if ((player.type === "chaser" || player.type === "ghost") && player.colorIndex !== null && player.colorIndex !== undefined) {
+    if (player.type === "chaser" && player.colorIndex !== null && player.colorIndex !== undefined) {
       playerControlledChaserIndices.add(player.colorIndex);
     }
   });
   // Also check if local player is a chaser (might not be in positions yet)
-  if ((myCharacterType === "chaser" || myCharacterType === "ghost") && myColorIndex !== null) {
+  if (myCharacterType === "chaser" && myColorIndex !== null) {
     playerControlledChaserIndices.add(myColorIndex);
   }
   const totalChaserCount = playerControlledChaserIndices.size;
@@ -730,12 +638,12 @@ function applyServerPositions(positions) {
   
   // Ensure all chasers are visible (create missing ones if needed)
   for (let i = 0; i < 4; i++) {
-    if (!ghosts[i]) {
-      // Create ghost element if it doesn't exist
-      const spawnPos = ghostSpawnPositions[i] || { x: 11 + i, y: 11 };
+    if (!chasers[i]) {
+      // Create chaser element if it doesn't exist
+      const spawnPos = chaserSpawnPositions[i] || { x: 11 + i, y: 11 };
       const px = spawnPos.x * CELL_SIZE + CHARACTER_OFFSET;
       const py = spawnPos.y * CELL_SIZE + CHARACTER_OFFSET;
-      ghosts[i] = {
+      chasers[i] = {
         x: spawnPos.x,
         y: spawnPos.y,
         px,
@@ -745,7 +653,7 @@ function applyServerPositions(positions) {
         color: "white",
         speed: 1.0,
         spawnPos: { ...spawnPos },
-        element: createCharacter("ghost", "white", spawnPos.x, spawnPos.y),
+        element: createCharacter("chaser", "white", spawnPos.x, spawnPos.y),
         dirX: 0,
         dirY: 0,
         nextDirX: 0,
@@ -754,22 +662,7 @@ function applyServerPositions(positions) {
         lastDirY: 0,
         positionHistory: [],
       };
-      updateCharacterAppearance(ghosts[i]);
-      // Set initial opacity - check if this is the player's chaser
-      if (ghosts[i].element) {
-        const isMyChaser = (myCharacterType === "chaser" || myCharacterType === "ghost") && myColorIndex === i;
-        ghosts[i].element.style.opacity = isMyChaser ? "1" : "0.2";
-      }
-    } else if (!activeChaserIndices.has(i) && ghosts[i].element) {
-      // Chaser exists but not in active list - check if it's the player's chaser
-      const isMyChaser = (myCharacterType === "chaser" || myCharacterType === "ghost") && myColorIndex === i;
-      ghosts[i].element.style.opacity = isMyChaser ? "1" : "0.2";
-    } else if (ghosts[i].element) {
-      // Chaser is in active list - ensure opacity is correct (double-check it's not the player's chaser)
-      const isMyChaser = (myCharacterType === "chaser" || myCharacterType === "ghost") && myColorIndex === i;
-      if (isMyChaser) {
-        ghosts[i].element.style.opacity = "1";
-      }
+      // Appearance and opacity handled in 3D rendering
     }
   }
 }
@@ -782,9 +675,6 @@ function sendSpeedConfig(fugitiveSpeed, chaserSpeed) {
         type: "setSpeeds",
         fugitiveSpeed,
         chaserSpeed,
-        // Legacy support
-        pacmanSpeed: fugitiveSpeed,
-        ghostSpeed: chaserSpeed,
       })
     );
   }
@@ -857,7 +747,7 @@ function updateScoreDisplay() {
   
   // Check all connected chaser players to get the team score
   connectedPlayers.forEach((player) => {
-    if ((player.type === "chaser" || player.type === "ghost") && player.stats) {
+    if (player.type === "chaser" && player.stats) {
       teamChaserScore = player.stats.chaserScore || 0;
     }
   });
@@ -865,7 +755,7 @@ function updateScoreDisplay() {
   // If we're a chaser, also check our own stats
   if (myPlayerId) {
     const myPlayer = connectedPlayers.get(myPlayerId);
-    if (myPlayer && (myPlayer.type === "chaser" || myPlayer.type === "ghost") && myPlayer.stats) {
+    if (myPlayer && myPlayer.type === "chaser" && myPlayer.stats) {
       teamChaserScore = myPlayer.stats.chaserScore || 0;
     }
   }
@@ -927,11 +817,11 @@ function updateDebugDisplay() {
   html += `Color Index: ${myColorIndex !== null ? myColorIndex : "None"}<br>`;
   html += `─────────────────────<br>`;
   
-  if (myColorIndex !== null && ghosts[myColorIndex]) {
-    const ghost = ghosts[myColorIndex];
-    html += `Position: (${ghost.x}, ${ghost.y})<br>`;
-    html += `Target: (${ghost.targetX}, ${ghost.targetY})<br>`;
-    html += `Pixel: (${Math.round(ghost.px)}, ${Math.round(ghost.py)})<br>`;
+  if (myColorIndex !== null && chasers[myColorIndex]) {
+    const chaser = chasers[myColorIndex];
+    html += `Position: (${chaser.x}, ${chaser.y})<br>`;
+    html += `Target: (${chaser.targetX}, ${chaser.targetY})<br>`;
+    html += `Pixel: (${Math.round(chaser.px)}, ${Math.round(chaser.py)})<br>`;
   }
   
   debugDiv.innerHTML = html;
@@ -994,11 +884,11 @@ function updateDebugDisplay() {
   html += `Color Index: ${myColorIndex !== null ? myColorIndex : "None"}<br>`;
   html += `─────────────────────<br>`;
   
-  if (myColorIndex !== null && ghosts[myColorIndex]) {
-    const ghost = ghosts[myColorIndex];
-    html += `Position: (${ghost.x}, ${ghost.y})<br>`;
-    html += `Target: (${ghost.targetX}, ${ghost.targetY})<br>`;
-    html += `Pixel: (${Math.round(ghost.px)}, ${Math.round(ghost.py)})<br>`;
+  if (myColorIndex !== null && chasers[myColorIndex]) {
+    const chaser = chasers[myColorIndex];
+    html += `Position: (${chaser.x}, ${chaser.y})<br>`;
+    html += `Target: (${chaser.targetX}, ${chaser.targetY})<br>`;
+    html += `Pixel: (${Math.round(chaser.px)}, ${Math.round(chaser.py)})<br>`;
   }
   
   debugDiv.innerHTML = html;
@@ -1011,14 +901,14 @@ function updateDebugDisplay() {
 function updateAvailableColors(availableColors) {
   // Update character selection controllers (radio-like) based on availability
   if (window.characterControllers) {
-    ["pacman", "ghost"].forEach((type) => {
+    ["fugitive", "chaser"].forEach((type) => {
       const controllers = window.characterControllers[type] || [];
       for (let i = 0; i < controllers.length; i++) {
         const ctrl = controllers[i];
         if (!ctrl) continue;
         
-        // For chasers (ghost type), check both availability and selections
-        if (type === "ghost") {
+        // For chasers, check both availability and selections
+        if (type === "chaser") {
           const isAvailable = availableColors[type] && availableColors[type].includes(i);
           const isSelected = chaserSelections.has(i); // Selected but not yet joined
           const isJoined = playerNames.has(i); // Already joined
@@ -1039,7 +929,7 @@ function updateAvailableColors(availableColors) {
             ctrl.enable();
           }
         } else {
-          // For fugitives (pacman type), just check availability
+          // For fugitives, just check availability
           const isAvailable = availableColors[type] && availableColors[type].includes(i);
           if (isAvailable) {
             ctrl.enable();
@@ -1052,9 +942,9 @@ function updateAvailableColors(availableColors) {
   }
 
   // Check if all slots are full (queue needed)
-  const allPacmenFull = !availableColors.pacman || availableColors.pacman.length === 0;
-  const allGhostsFull = !availableColors.ghost || availableColors.ghost.length === 0;
-  const allSlotsFull = allPacmenFull && allGhostsFull;
+  const allFugitivesFull = !availableColors.fugitive || availableColors.fugitive.length === 0;
+  const allChasersFull = !availableColors.chaser || availableColors.chaser.length === 0;
+  const allSlotsFull = allFugitivesFull && allChasersFull;
 
   // Show/hide Join Queue button based on availability
   if (window.joinQueueController) {
@@ -1185,7 +1075,7 @@ function init() {
     window.guiParams = {
       camera3D: "Orthographic", // Camera type for 3D view
       cameraZoom: 0.98, // Camera zoom level (0.5 to 2.0)
-      ambientLightIntensity: 0.1, // Global ambient light intensity
+      ambientLightIntensity: 0.6, // Global ambient light intensity
       directionalLightIntensity: 0.3, // Global directional light intensity
       pointLightIntensity: 100, // Point light intensity for characters (0-400 range)
       pathColor: "#dddddd", // Path/floor color in hex (light gray)
@@ -1441,11 +1331,11 @@ function init() {
     init3DView();
   }
 
-  // Create 4 pacmen in corners
-  pacmanSpawnPositions.forEach((pos, i) => {
+  // Create 4 fugitives in corners
+  fugitiveSpawnPositions.forEach((pos, i) => {
     const px = pos.x * CELL_SIZE + CHARACTER_OFFSET;
     const py = pos.y * CELL_SIZE + CHARACTER_OFFSET;
-    const pacman = {
+    const fugitive = {
       x: pos.x,
       y: pos.y,
       px,
@@ -1453,24 +1343,21 @@ function init() {
       targetX: pos.x,
       targetY: pos.y,
       color: COLORS[i],
-      // Default pacman speed (kept in sync with server)
+      // Default fugitive speed (kept in sync with server)
       speed: 1.0,
       spawnPos: { ...pos },
-      element: createCharacter("pacman", COLORS[i], pos.x, pos.y),
+      element: createCharacter("fugitive", COLORS[i], pos.x, pos.y),
     };
-    if (pacman.element) {
-      pacmen.push(pacman);
-      updateCharacterAppearance(pacman);
-    }
+    fugitives.push(fugitive);
   });
 
   // No initial character selection - player must manually select
 
-  // Create 4 ghosts at spawn positions (marked with 3 in the map)
-  // Use the pre-calculated ghost spawn positions
-  const ghostPositions = [];
-  for (let i = 0; i < 4 && i < ghostSpawnPositions.length; i++) {
-    ghostPositions.push(ghostSpawnPositions[i]);
+  // Create 4 chasers at spawn positions (marked with 3 in the map)
+  // Use the pre-calculated chaser spawn positions
+  const chaserPositions = [];
+  for (let i = 0; i < 4 && i < chaserSpawnPositions.length; i++) {
+    chaserPositions.push(chaserSpawnPositions[i]);
   }
 
   // Fill remaining positions if needed
@@ -1480,11 +1367,11 @@ function init() {
     { x: 13, y: 11 },
     { x: 14, y: 11 },
   ];
-  for (let i = ghostPositions.length; i < 4; i++) {
-    ghostPositions.push(defaultPositions[i - ghostPositions.length]);
+  for (let i = chaserPositions.length; i < 4; i++) {
+    chaserPositions.push(defaultPositions[i - chaserPositions.length]);
   }
 
-  ghostPositions.forEach((pos, i) => {
+  chaserPositions.forEach((pos, i) => {
     const px = pos.x * CELL_SIZE + CHARACTER_OFFSET;
     const py = pos.y * CELL_SIZE + CHARACTER_OFFSET;
 
@@ -1506,7 +1393,7 @@ function init() {
       }
     }
 
-    const ghost = {
+    const chaser = {
       x: pos.x,
       y: pos.y,
       px,
@@ -1516,47 +1403,20 @@ function init() {
       color: COLORS[i],
       speed: 1.0,
       spawnPos: { ...pos },
-      element: createCharacter("ghost", COLORS[i], pos.x, pos.y),
+      element: createCharacter("chaser", COLORS[i], pos.x, pos.y),
       moveTimer: 0,
       lastDirX: initialDirX,
       lastDirY: initialDirY,
       positionHistory: [],
     };
-    if (ghost.element) {
-      ghosts.push(ghost);
-      updateCharacterAppearance(ghost);
-    }
+    chasers.push(chaser);
   });
 
-  // Set initial opacity to 20% for all chasers (they become fully opaque when controlled)
-  ghosts.forEach((ghost) => {
-    if (ghost && ghost.element && ghost.element.style) {
-      ghost.element.style.opacity = "0.2";
-    }
-  });
+  // Opacity handled in 3D rendering
 
-  // Apply team images from config to existing characters after they are created
-  if (window.teamConfig && window.teamConfig.teams) {
-    window.teamConfig.teams.forEach((team) => {
-      if (team.image && team.image.trim() !== "" && pacmen[team.colorIndex] && pacmen[team.colorIndex].element && pacmen[team.colorIndex].element.style) {
-        pacmen[team.colorIndex].element.style.backgroundImage = `url(${team.image})`;
-        pacmen[team.colorIndex].element.style.backgroundSize = "cover";
-        pacmen[team.colorIndex].element.style.backgroundPosition = "center";
-        pacmen[team.colorIndex].element.style.backgroundRepeat = "no-repeat";
-      }
-    });
-  }
+  // Team images are handled in 3D rendering (see 3d.js)
 
   // (Per-color pair GUI controls and scoring have been removed for now)
-
-  // Keyboard controls
-  const keys = {};
-  document.addEventListener("keydown", (e) => {
-    keys[e.key] = true;
-  });
-  document.addEventListener("keyup", (e) => {
-    keys[e.key] = false;
-  });
 
   // Render loop - smooths visual positions toward server state
   // Server sends authoritative pixel positions; we interpolate for smoother motion
@@ -1568,90 +1428,7 @@ function init() {
       return;
     }
 
-    // 2D rendering with client-side prediction for my character
-    const OTHER_SMOOTHING = 0.5; // Smooth interpolation for other players
-    const SNAP_DISTANCE = 40; // pixels – snap if too far to avoid long slides
-    const CLIENT_MOVE_SPEED = 0.08; // Local movement speed per frame (adjust for smoothness)
-
-    pacmen.forEach((pacman, index) => {
-      if (!pacman || !pacman.element) return;
-
-      const isMine = myCharacterType === "pacman" && myColorIndex === index;
-
-      if (pacman.renderX === undefined) {
-        pacman.renderX = pacman.px;
-        pacman.renderY = pacman.py;
-      } else {
-        const dx = pacman.px - pacman.renderX;
-        const dy = pacman.py - pacman.renderY;
-        const dist = Math.sqrt(dx * dx + dy * dy);
-        if (dist > SNAP_DISTANCE) {
-          pacman.renderX = pacman.px;
-          pacman.renderY = pacman.py;
-        } else {
-          pacman.renderX += dx * OTHER_SMOOTHING;
-          pacman.renderY += dy * OTHER_SMOOTHING;
-        }
-      }
-
-      updatePosition(pacman.element, pacman.renderX, pacman.renderY);
-    });
-
-    ghosts.forEach((ghost, index) => {
-      if (!ghost || !ghost.element) return;
-
-      const isMine = (myCharacterType === "ghost" || myCharacterType === "chaser") && myColorIndex === index;
-
-      if (ghost.renderX === undefined) {
-        ghost.renderX = ghost.px;
-        ghost.renderY = ghost.py;
-      }
-
-      // For MY character: move smoothly toward target, server corrections blend in
-      // For OTHER characters: interpolate toward server position
-      if (isMine) {
-        // Move toward target position based on current direction
-        const targetPixel = getTargetPixelPos(ghost.targetX, ghost.targetY);
-        const toTargetX = targetPixel.x - ghost.renderX;
-        const toTargetY = targetPixel.y - ghost.renderY;
-        const distToTarget = Math.sqrt(toTargetX * toTargetX + toTargetY * toTargetY);
-        
-        if (distToTarget > 1) {
-          // Move toward target
-          ghost.renderX += (toTargetX / distToTarget) * CLIENT_MOVE_SPEED * CELL_SIZE;
-          ghost.renderY += (toTargetY / distToTarget) * CLIENT_MOVE_SPEED * CELL_SIZE;
-        }
-        
-        // Blend with server position (gentle correction)
-        const toServerX = ghost.px - ghost.renderX;
-        const toServerY = ghost.py - ghost.renderY;
-        const distToServer = Math.sqrt(toServerX * toServerX + toServerY * toServerY);
-        
-        if (distToServer > SNAP_DISTANCE) {
-          // Too far from server, snap to it
-          ghost.renderX = ghost.px;
-          ghost.renderY = ghost.py;
-        } else if (distToServer > 2) {
-          // Gentle correction toward server position (10% blend)
-          ghost.renderX += toServerX * 0.1;
-          ghost.renderY += toServerY * 0.1;
-        }
-      } else {
-        // Other players: interpolate toward server position
-        const dx = ghost.px - ghost.renderX;
-        const dy = ghost.py - ghost.renderY;
-        const dist = Math.sqrt(dx * dx + dy * dy);
-        if (dist > SNAP_DISTANCE) {
-          ghost.renderX = ghost.px;
-          ghost.renderY = ghost.py;
-        } else {
-          ghost.renderX += dx * OTHER_SMOOTHING;
-          ghost.renderY += dy * OTHER_SMOOTHING;
-        }
-      }
-
-      updatePosition(ghost.element, ghost.renderX, ghost.renderY);
-    });
+    // 2D rendering removed - all rendering is handled by WebGL/3D
 
     animationId = requestAnimationFrame(renderLoop);
   }
@@ -1659,14 +1436,13 @@ function init() {
   // Handle player input - send direction to server
   // WASD controls whichever chaser the player is currently controlling
   document.addEventListener("keydown", (e) => {
-    keys[e.key] = true;
-    
     // Only accept WASD keys (not arrow keys)
+    const key = e.key.toLowerCase();
     let dir = null;
-    if (e.key === "a" || e.key === "A") dir = "left";
-    else if (e.key === "d" || e.key === "D") dir = "right";
-    else if (e.key === "w" || e.key === "W") dir = "up";
-    else if (e.key === "s" || e.key === "S") dir = "down";
+    if (key === "a") dir = "left";
+    else if (key === "d") dir = "right";
+    else if (key === "w") dir = "up";
+    else if (key === "s") dir = "down";
     
     // Only process WASD movement keys
     if (!dir) {
@@ -1676,17 +1452,17 @@ function init() {
     if (!multiplayerMode || !myPlayerId) return;
     
     // If already controlling a chaser (any chaser 0-3), send input for that chaser
-    if ((myCharacterType === "chaser" || myCharacterType === "ghost") && myColorIndex !== null && myColorIndex >= 0 && myColorIndex <= 3) {
+    if (myCharacterType === "chaser" && myColorIndex !== null && myColorIndex >= 0 && myColorIndex <= 3) {
       sendInput({ dir });
       return;
     }
     
     // If not controlling any chaser, auto-join chaser 0 as default
-    if (myCharacterType !== "chaser" && myCharacterType !== "ghost") {
+    if (myCharacterType !== "chaser") {
       joinAsCharacter("chaser", 0, guiParams.playerInitials);
       // Wait a moment for the join to process, then send input
       setTimeout(() => {
-        if ((myCharacterType === "chaser" || myCharacterType === "ghost") && myColorIndex === 0) {
+        if (myCharacterType === "chaser" && myColorIndex === 0) {
           sendInput({ dir });
         }
       }, 50);
@@ -1743,7 +1519,7 @@ function moveCharacter(character, speedMultiplier = 1.0) {
     }
   }
 
-  updatePosition(character.element, character.px, character.py);
+  // Position updates handled in 3D rendering
 }
 
 function teleportCharacter(character) {
@@ -1950,158 +1726,26 @@ function moveGhostAI(ghost) {
 }
 
 function createCharacter(type, color, x, y) {
-  // Character elements are not needed in 3D-only mode
-  // Return a dummy object to maintain compatibility
-  const el = document.createElement("div");
-  if (!el) return null; // Safety check
-  el.className = type;
-  el.style.display = "none"; // Hide since we're not using 2D
-  if (document.body) {
-    document.body.appendChild(el); // Append to body instead of maze
-  }
-  return el;
+  // Character DOM elements are not needed - we use WebGL/3D rendering only
+  return null;
 }
 
+// Character appearance is handled in 3D rendering - no DOM manipulation needed
 function updateCharacterAppearance(character) {
-  if (!character || !character.element) return;
-
-  const el = character.element;
-  if (!el || !el.classList || !el.style) return; // Safety check
-  
-  const isPacman = el.classList.contains("pacman");
-  const isGhost = el.classList.contains("ghost");
-
-  // Remove old color classes
-  COLORS.forEach((c) => el.classList.remove(c));
-
-
-  // Update color
-  if (character.color) {
-    const colorLower = character.color.toLowerCase();
-    // Check if it's a predefined color name
-    if (COLORS.includes(colorLower)) {
-      el.classList.add(colorLower);
-      // Clear inline styles for predefined colors
-      if (isPacman) el.style.background = "";
-      if (isGhost) el.style.borderColor = "";
-    } else {
-      // Custom color (hex or CSS color) - apply directly via style
-      if (isPacman) {
-        el.style.background = character.color;
-      } else if (isGhost) {
-        el.style.borderColor = character.color;
-      }
-    }
-  }
-
-  // Update image - check for team image from config first, then character.image
-  let imageToUse = null;
-  if (isPacman && character.color) {
-    const colorIndex = COLORS.indexOf(character.color.toLowerCase());
-    if (colorIndex >= 0 && window.teamConfig && window.teamConfig.teams) {
-      const team = window.teamConfig.teams.find(t => t.colorIndex === colorIndex);
-      if (team && team.image && team.image.trim() !== "") {
-        imageToUse = team.image;
-      }
-    }
-  }
-
-  // Fall back to character.image if no team image is set
-  if (!imageToUse && character.image && character.image.trim() !== "") {
-    imageToUse = character.image;
-  }
-
-  if (imageToUse) {
-    if (isPacman) {
-      el.style.backgroundImage = `url(${imageToUse})`;
-      el.style.backgroundSize = "cover";
-      el.style.backgroundPosition = "center";
-      el.style.backgroundRepeat = "no-repeat";
-      // If custom color, use it as fallback
-      if (character.color && !COLORS.includes(character.color.toLowerCase())) {
-        el.style.backgroundColor = character.color;
-      }
-    } else if (isGhost) {
-      el.style.backgroundImage = `url(${imageToUse})`;
-      el.style.backgroundSize = "cover";
-      el.style.backgroundPosition = "center";
-      el.style.backgroundRepeat = "no-repeat";
-    }
-  } else {
-    el.style.backgroundImage = "";
-    el.style.backgroundSize = "";
-    el.style.backgroundPosition = "";
-    el.style.backgroundRepeat = "";
-  }
+  // No-op: appearance is handled by WebGL/3D rendering
 }
 
+// Position updates are handled in 3D rendering - no DOM manipulation needed
 function updatePosition(element, px, py) {
-  element.style.left = px + "px";
-  element.style.top = py + "px";
+  // No-op: positions are handled by WebGL/3D rendering
 }
 
+// Flash effect would be handled in 3D rendering if needed
 function flashCharacters(chaserColorIndex, fugitiveColorIndex) {
-  // Get the chaser and fugitive elements
-  const chaser = ghosts[chaserColorIndex];
-  const fugitive = pacmen[fugitiveColorIndex];
-
-  if (!chaser || !chaser.element || !fugitive || !fugitive.element) return;
-
-  // Get the color for the flash
-  const colorName = COLORS[chaserColorIndex];
-  const defaultColors = ["#ff0000", "#00ff00", "#0000ff", "#ffff00"];
-  const flashColor = defaultColors[chaserColorIndex];
-
-  // Create flash effect using box-shadow
-  const flashDuration = 300; // milliseconds
-  const originalBoxShadow = chaser.element.style.boxShadow;
-  const originalBoxShadowFugitive = fugitive.element.style.boxShadow;
-
-  // Apply flash to chaser
-  chaser.element.style.boxShadow = `0 0 20px ${flashColor}, 0 0 40px ${flashColor}, 0 0 60px ${flashColor}`;
-  chaser.element.style.transition = `box-shadow ${flashDuration}ms ease-out`;
-
-  // Apply flash to fugitive
-  fugitive.element.style.boxShadow = `0 0 20px ${flashColor}, 0 0 40px ${flashColor}, 0 0 60px ${flashColor}`;
-  fugitive.element.style.transition = `box-shadow ${flashDuration}ms ease-out`;
-
-  // Remove flash after duration
-  setTimeout(() => {
-    if (chaser.element) {
-      chaser.element.style.boxShadow = originalBoxShadow;
-      chaser.element.style.transition = "";
-    }
-    if (fugitive.element) {
-      fugitive.element.style.boxShadow = originalBoxShadowFugitive;
-      fugitive.element.style.transition = "";
-    }
-  }, flashDuration);
+  // No-op: visual effects are handled by WebGL/3D rendering
 }
 
-function checkCollisions() {
-  pacmen.forEach((pacman) => {
-    if (!pacman) return;
-    ghosts.forEach((ghost) => {
-      if (!ghost) return;
-      // Check if they're on the same grid position and same color
-      if (pacman.color === ghost.color && pacman.x === ghost.x && pacman.y === ghost.y) {
-        // Award point to ghost (chaser)
-        ghost.score++;
-        if (ghost.scoreObj) {
-          ghost.scoreObj.ghostScore = ghost.score;
-        }
-
-        // Respawn both characters
-        if (pacman.spawnPos) {
-          respawnCharacter(pacman, pacman.spawnPos);
-        }
-        if (ghost.spawnPos) {
-          respawnGhost(ghost, ghost.spawnPos);
-        }
-      }
-    });
-  });
-}
+// Collision detection is handled server-side (server-authoritative)
 
 // Handle "Enter the Dome" button click
 function setupDomeEntry() {

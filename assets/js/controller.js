@@ -486,7 +486,7 @@ function updateScoreDisplay() {
   
   // Find first chaser's score (all chasers share the same team score)
   for (const player of connectedPlayers.values()) {
-    if ((player.type === "chaser" || player.type === "ghost") && player.stats?.chaserScore != null) {
+    if (player.type === "chaser" && player.stats?.chaserScore != null) {
       elements.scoreValue.textContent = player.stats.chaserScore;
       return;
     }

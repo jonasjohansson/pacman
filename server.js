@@ -1,4 +1,4 @@
-// Simple WebSocket server for Pacman multiplayer game
+// Simple WebSocket server for Jagad multiplayer game
 // Server-authoritative: server maintains game state and runs game loop
 
 const http = require("http");
@@ -639,15 +639,15 @@ function gameLoop() {
   if (debugTickCounter % 60 === 0) {
   }
 
-  // Process player input (pacmen and ghosts always)
+  // Process player input (fugitives and chasers always)
   gameState.players.forEach((player, playerId) => {
     if (!player.connected || !player.pendingInput) return;
     const input = player.pendingInput;
     player.pendingInput = null;
 
-    if (player.type === "fugitive" || player.type === "pacman") {
-      const pacman = gameState.fugitives[player.colorIndex];
-      if (!pacman) return;
+    if (player.type === "fugitive") {
+      const fugitive = gameState.fugitives[player.colorIndex];
+      if (!fugitive) return;
 
       // Direction-based input: input.dir is 'left' | 'right' | 'up' | 'down'
       if (input.dir) {
@@ -657,22 +657,22 @@ function gameLoop() {
         const dy = dirDef.y;
 
         // Store desired direction; it will be applied when possible (at next tile center)
-        pacman.nextDirX = dx;
-        pacman.nextDirY = dy;
+        fugitive.nextDirX = dx;
+        fugitive.nextDirY = dy;
 
         // If currently stopped, try to start immediately in this direction
-        if (pacman.dirX === 0 && pacman.dirY === 0) {
-          const startX = pacman.x + dx;
-          const startY = pacman.y + dy;
+        if (fugitive.dirX === 0 && fugitive.dirY === 0) {
+          const startX = fugitive.x + dx;
+          const startY = fugitive.y + dy;
           if (startX >= 0 && startX < COLS && startY >= 0 && startY < ROWS && isPath(startX, startY)) {
-            pacman.dirX = dx;
-            pacman.dirY = dy;
-            pacman.targetX = startX;
-            pacman.targetY = startY;
+            fugitive.dirX = dx;
+            fugitive.dirY = dy;
+            fugitive.targetX = startX;
+            fugitive.targetY = startY;
           }
         }
       }
-    } else if (player.type === "chaser" || player.type === "ghost") {
+    } else if (player.type === "chaser") {
       const chaser = gameState.chasers[player.colorIndex];
       if (!chaser) return;
 
@@ -705,16 +705,16 @@ function gameLoop() {
 
   // Move fugitives only when game is started
   if (gameState.gameStarted) {
-    gameState.fugitives.forEach((pacman, index) => {
-      if (!pacman || gameState.caughtFugitives.has(index)) return; // Skip caught fugitives
+    gameState.fugitives.forEach((fugitive, index) => {
+      if (!fugitive || gameState.caughtFugitives.has(index)) return; // Skip caught fugitives
 
       // Fugitives are always AI-controlled, never player-controlled
       // Move fugitive toward its current target using global fugitive speed
-      moveCharacter(pacman, gameState.fugitiveSpeed);
+      moveCharacter(fugitive, gameState.fugitiveSpeed);
 
-      if (isAtTarget(pacman)) {
+      if (isAtTarget(fugitive)) {
         // Fugitives are always AI-controlled
-        moveFugitiveAI(pacman, index);
+        moveFugitiveAI(fugitive, index);
       }
     });
   }
@@ -726,7 +726,7 @@ function gameLoop() {
     gameState.chasers.forEach((chaser, index) => {
       if (!chaser) return;
       const isPlayerControlled = Array.from(gameState.players.values()).some(
-        (p) => (p.type === "chaser" || p.type === "ghost") && p.colorIndex === index && p.connected
+        (p) => p.type === "chaser" && p.colorIndex === index && p.connected
       );
 
       // Only move chasers that are player-controlled
@@ -1195,14 +1195,13 @@ function handleJoin(ws, playerId, data) {
   const { characterType, colorIndex } = data;
 
   // Players can only join as chasers (fugitives are AI-controlled)
-  const isFugitive = characterType === "fugitive" || characterType === "pacman";
-  if (isFugitive) {
+  if (characterType === "fugitive") {
     ws.send(JSON.stringify({ type: "joinFailed", reason: "Players can only join as chasers" }));
     return;
   }
 
   // Normalize character type for availableColors lookup
-  const normalizedTypeForColors = characterType === "chaser" || characterType === "ghost" ? "chaser" : characterType;
+  const normalizedTypeForColors = characterType === "chaser" ? "chaser" : characterType;
   const availableColors = gameState.availableColors[normalizedTypeForColors];
   if (!availableColors || !availableColors.includes(colorIndex)) {
     ws.send(JSON.stringify({ type: "joinFailed", reason: "Chaser slot already taken" }));
@@ -1220,9 +1219,9 @@ function handleJoin(ws, playerId, data) {
   if (existing) {
     // Normalize character type for availableColors lookup
     const existingNormalizedType =
-      existing.type === "chasee" || existing.type === "pacman"
+      existing.type === "fugitive"
         ? "fugitive"
-        : existing.type === "chaser" || existing.type === "ghost"
+        : existing.type === "chaser"
         ? "chaser"
         : existing.type;
     const prevList = gameState.availableColors[existingNormalizedType];
@@ -1243,9 +1242,8 @@ function handleJoin(ws, playerId, data) {
   // Get player initials/name from data
   const playerName = data.playerName || "AI"; // Default to "AI" if not provided
 
-  // Support both new names (fugitive/chaser) and legacy names (pacman/ghost)
-  const isChaser = characterType === "chaser" || characterType === "ghost";
-  const normalizedType = "chaser"; // All players are chasers
+  // All players are chasers
+  const normalizedType = "chaser";
 
   gameState.players.set(playerId, {
     type: normalizedType,
@@ -1323,17 +1321,12 @@ function handleSelectChaser(ws, playerId, data) {
 }
 
 function handleSetSpeeds(data) {
-  const { pacmanSpeed, ghostSpeed, fugitiveSpeed, chaserSpeed } = data;
-  // Support both new and legacy names
+  const { fugitiveSpeed, chaserSpeed } = data;
   if (typeof fugitiveSpeed === "number") {
     gameState.fugitiveSpeed = Math.max(0.3, Math.min(1, fugitiveSpeed));
-  } else if (typeof pacmanSpeed === "number") {
-    gameState.fugitiveSpeed = Math.max(0.3, Math.min(1, pacmanSpeed));
   }
   if (typeof chaserSpeed === "number") {
     gameState.chaserSpeed = Math.max(0.3, Math.min(1, chaserSpeed));
-  } else if (typeof ghostSpeed === "number") {
-    gameState.chaserSpeed = Math.max(0.3, Math.min(1, ghostSpeed));
   }
 }
 
@@ -1373,15 +1366,15 @@ function handleDisconnect(playerId) {
   const player = gameState.players.get(playerId);
   if (player) {
     // Check if this is the last chaser player (before removing them)
-    const chaserPlayers = Array.from(gameState.players.values()).filter((p) => (p.type === "chaser" || p.type === "ghost") && p.connected);
-    const isLastChaser = chaserPlayers.length === 1 && (player.type === "chaser" || player.type === "ghost");
+    const chaserPlayers = Array.from(gameState.players.values()).filter((p) => p.type === "chaser" && p.connected);
+    const isLastChaser = chaserPlayers.length === 1 && player.type === "chaser";
 
     // Check if there's only 1 player total (before removing this one)
     const totalPlayers = Array.from(gameState.players.values()).filter((p) => p.connected);
     const isOnlyPlayer = totalPlayers.length === 1;
 
-    // Free up the chaser slot (handle both "chaser" and "ghost" types)
-    if (player.type === "chaser" || player.type === "ghost") {
+    // Free up the chaser slot
+    if (player.type === "chaser") {
       if (!gameState.availableColors.chaser.includes(player.colorIndex)) {
         gameState.availableColors.chaser.push(player.colorIndex);
         gameState.availableColors.chaser.sort();
@@ -1390,7 +1383,7 @@ function handleDisconnect(playerId) {
       // gameState.chasers[player.colorIndex] = null;
     } else {
       // For other types, use the old logic
-      const normalizedType = player.type === "fugitive" || player.type === "pacman" ? "fugitive" : player.type;
+      const normalizedType = player.type === "fugitive" ? "fugitive" : player.type;
       if (gameState.availableColors[normalizedType]) {
         if (!gameState.availableColors[normalizedType].includes(player.colorIndex)) {
           gameState.availableColors[normalizedType].push(player.colorIndex);
@@ -1437,7 +1430,7 @@ function sendGameState(ws) {
   // Pre-compute player-controlled chasers (do this once instead of per-chaser)
   const playerControlledChasers = new Set();
   gameState.players.forEach((player) => {
-    if ((player.type === "chaser" || player.type === "ghost") && player.connected) {
+    if (player.type === "chaser" && player.connected) {
       playerControlledChasers.add(player.colorIndex);
     }
   });
@@ -1505,9 +1498,6 @@ function sendGameState(ws) {
       availableColors: {
         fugitive: gameState.availableColors.fugitive,
         chaser: gameState.availableColors.chaser,
-        // Legacy support (reference, not copy)
-        pacman: gameState.availableColors.fugitive,
-        ghost: gameState.availableColors.chaser,
       },
       chaserSelections: chaserSelections, // Selections before joining
       gameStarted: gameState.gameStarted,
@@ -1515,9 +1505,6 @@ function sendGameState(ws) {
       positions: {
         fugitives: fugitivePositions,
         chasers: chaserPositions,
-        // Legacy support (reference same arrays)
-        pacmen: fugitivePositions,
-        ghosts: chaserPositions,
       },
     })
   );
@@ -1527,7 +1514,7 @@ function broadcastGameState() {
   // Pre-compute player-controlled chasers (do this once instead of per-chaser)
   const playerControlledChasers = new Set();
   gameState.players.forEach((player) => {
-    if ((player.type === "chaser" || player.type === "ghost") && player.connected) {
+    if (player.type === "chaser" && player.connected) {
       playerControlledChasers.add(player.colorIndex);
     }
   });
@@ -1591,13 +1578,10 @@ function broadcastGameState() {
   broadcast({
     type: "gameState",
     players: players,
-    availableColors: {
-      fugitive: gameState.availableColors.fugitive,
-      chaser: gameState.availableColors.chaser,
-      // Legacy support (reference, not copy)
-      pacman: gameState.availableColors.fugitive,
-      ghost: gameState.availableColors.chaser,
-    },
+      availableColors: {
+        fugitive: gameState.availableColors.fugitive,
+        chaser: gameState.availableColors.chaser,
+      },
     chaserSelections: chaserSelections, // Selections before joining
     gameStarted: gameState.gameStarted,
     gameCode: gameState.gameCode, // 2-digit code for joining
@@ -1605,8 +1589,6 @@ function broadcastGameState() {
       fugitives: fugitivePositions,
       chasers: chaserPositions,
       // Legacy support (reference same arrays)
-      pacmen: fugitivePositions,
-      ghosts: chaserPositions,
     },
   });
 }

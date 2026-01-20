@@ -18,7 +18,7 @@
   --character-offset: calc((var(--cell-size) - var(--character-size)) / 2);
   --border-width: 2px;
   --border-radius: 4px;
-  --ghost-border-width: 2px;
+  --chaser-border-width: 2px;
   --border-style: double;
 
   /* Z-index */
@@ -145,7 +145,7 @@ body {
   border: 1px solid var(--color-wall-border);
 }
 
-.pacman {
+.fugitive {
   position: absolute;
   width: var(--character-size);
   height: var(--character-size);
@@ -153,53 +153,53 @@ body {
   z-index: var(--z-characters);
 }
 
-.pacman.red {
+.fugitive.red {
   background: var(--color-red);
 }
 
-.pacman.green {
+.fugitive.green {
   background: var(--color-green);
 }
 
-.pacman.blue {
+.fugitive.blue {
   background: var(--color-blue);
 }
 
-.pacman.yellow {
+.fugitive.yellow {
   background: var(--color-yellow);
 }
 
-.pacman.selected {
+.fugitive.selected {
   box-shadow: 0 0 10px 3px rgba(255, 255, 255, 0.8), 0 0 20px 5px rgba(255, 255, 255, 0.5);
 }
 
-.ghost {
+.chaser {
   position: absolute;
   width: var(--character-size);
   height: var(--character-size);
   border-radius: 50%;
-  border: var(--ghost-border-width) solid;
+  border: var(--chaser-border-width) solid;
   background: transparent;
   z-index: var(--z-characters);
 }
 
-.ghost.red {
+.chaser.red {
   border-color: var(--color-red);
 }
 
-.ghost.green {
+.chaser.green {
   border-color: var(--color-green);
 }
 
-.ghost.blue {
+.chaser.blue {
   border-color: var(--color-blue);
 }
 
-.ghost.yellow {
+.chaser.yellow {
   border-color: var(--color-yellow);
 }
 
-.ghost.selected {
+.chaser.selected {
   box-shadow: 0 0 10px 3px rgba(255, 255, 255, 0.8), 0 0 20px 5px rgba(255, 255, 255, 0.5);
 }
 

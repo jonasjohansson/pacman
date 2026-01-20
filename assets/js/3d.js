@@ -99,7 +99,7 @@ function init3D() {
   renderer.shadowMap.enabled = false;
 
   // Lights - minimal ambient so point lights are clearly visible
-  ambientLight3D = new THREE.AmbientLight(0xffffff, 0.1);
+  ambientLight3D = new THREE.AmbientLight(0xffffff, 0.6);
   scene.add(ambientLight3D);
 
   // Reduced directional light so point lights stand out
@@ -436,9 +436,9 @@ function updatePositions3D(positions) {
     }
   });
 
-  // Update chasers (server may still use "ghosts" name)
+  // Update chasers
   // All chasers are white
-  const chaserPositions = positions.chasers || positions.ghosts || [];
+  const chaserPositions = positions.chasers || [];
 
   // Track which chaser indices are currently active
   const activeChaserIndices = new Set();
@@ -469,7 +469,7 @@ function updatePositions3D(positions) {
     // Get local player info from window (set by game.js)
     const isMyChaser =
       window.myCharacterType &&
-      (window.myCharacterType === "chaser" || window.myCharacterType === "ghost") &&
+      window.myCharacterType === "chaser" &&
       window.myColorIndex === index;
     const shouldBeFullOpacity = isPlayerControlled || isMyChaser;
     if (chasers3D[index] && chasers3D[index].mesh) {
