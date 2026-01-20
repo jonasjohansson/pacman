@@ -660,7 +660,25 @@ function initEventListeners() {
   }
 }
 
-// Initialize when DOM is ready
+// Export initialization function for module usage
+export function initControllerModule(containerSelector = "body") {
+  const container = typeof containerSelector === "string" 
+    ? document.querySelector(containerSelector) 
+    : containerSelector;
+  
+  if (!container) {
+    console.error("Controller module: Container not found:", containerSelector);
+    return;
+  }
+
+  console.log("[controller] Initializing module in container:", containerSelector);
+  initElements();
+  initEventListeners();
+  updateUI();
+  initWebSocket();
+}
+
+// Auto-initialize if running standalone (not imported as module)
 if (document.readyState === "loading") {
   document.addEventListener("DOMContentLoaded", () => {
     console.log("[controller] DOM loaded, initializing...");

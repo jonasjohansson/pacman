@@ -319,16 +319,35 @@ function moveFugitiveAI(fugitive, index) {
     return;
   }
 
-  // Choose the move that maximizes distance from the closest chaser
+  // 30% chance to pick a random valid move for more unpredictable behavior
+  if (Math.random() < 0.3 && possibleMoves.length > 0) {
+    const randomMove = possibleMoves[Math.floor(Math.random() * possibleMoves.length)];
+    if (randomMove) {
+      fugitive.targetX = randomMove.newX;
+      fugitive.targetY = randomMove.newY;
+      fugitive.dirX = randomMove.x;
+      fugitive.dirY = randomMove.y;
+      fugitive.lastDirX = randomMove.x;
+      fugitive.lastDirY = randomMove.y;
+    }
+    return;
+  }
+
+  // Otherwise, choose based on distance but add randomness to scoring
   let bestMove = possibleMoves[0];
-  let bestDistance = -Infinity;
+  let bestScore = -Infinity;
   const chaserPos = { x: closestChaser.x, y: closestChaser.y };
 
   possibleMoves.forEach((move) => {
     const movePos = { x: move.newX, y: move.newY };
     const distance = calculateDistanceWithWrap(movePos, chaserPos);
-    if (distance > bestDistance) {
-      bestDistance = distance;
+    
+    // Add randomness to score (±20% variation) to make behavior less predictable
+    const randomFactor = 0.8 + Math.random() * 0.4; // 0.8 to 1.2
+    const score = distance * randomFactor;
+    
+    if (score > bestScore) {
+      bestScore = score;
       bestMove = move;
     }
   });

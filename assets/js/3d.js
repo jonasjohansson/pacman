@@ -113,6 +113,11 @@ function init3D() {
 
   // Handle window resize
   window.addEventListener("resize", onWindowResize3D);
+  
+  // Force initial resize to ensure correct dimensions
+  setTimeout(() => {
+    onWindowResize3D();
+  }, 0);
 }
 
 function createMazeVoxels() {
@@ -327,7 +332,11 @@ function createFugitive3D(color, x, y, px, py) {
     posZ = y * CELL_SIZE + CELL_SIZE / 2;
   }
   group.position.set(posX, CHARACTER_SIZE / 2, posZ);
-  scene.add(group);
+  if (scene) {
+    scene.add(group);
+  } else {
+    console.error("[3d] Scene not initialized when creating fugitive!");
+  }
 
   // Store the group (which contains both mesh and light)
   return { mesh: group, light: pointLight };
@@ -380,7 +389,11 @@ function createChaser3D(color, x, y, px, py) {
     posZ = y * CELL_SIZE + CELL_SIZE / 2;
   }
   group.position.set(posX, CHARACTER_SIZE / 2, posZ);
-  scene.add(group);
+  if (scene) {
+    scene.add(group);
+  } else {
+    console.error("[3d] Scene not initialized when creating chaser!");
+  }
 
   // Store the group (which contains both mesh and light)
   return { mesh: group, light: pointLight };
@@ -412,6 +425,7 @@ function updatePositions3D(positions) {
 
     if (!fugitives3D[index]) {
       // Use pixel coordinates if available for accurate positioning
+      // Note: createFugitive3D already adds to scene, so we don't need to add again
       fugitives3D[index] = createFugitive3D(pos.color, pos.x, pos.y, pos.px, pos.py);
     } else {
       // Update group position - convert server's px/py (with CHARACTER_OFFSET) to centered position
@@ -450,6 +464,7 @@ function updatePositions3D(positions) {
 
     if (!chasers3D[index]) {
       // Use pixel coordinates if available for accurate positioning
+      // Note: createChaser3D already adds to scene, so we don't need to add again
       chasers3D[index] = createChaser3D("white", pos.x, pos.y, pos.px, pos.py);
     } else {
       // Update group position - convert server's px/py (with CHARACTER_OFFSET) to centered position
@@ -490,61 +505,7 @@ function updatePositions3D(positions) {
     }
   });
 
-  // Ensure all chasers are visible in 3D (create missing ones if needed)
-  for (let i = 0; i < 4; i++) {
-    if (!chasers3D[i] && !activeChaserIndices.has(i)) {
-      // Create chaser at spawn position if it doesn't exist
-      // Use default spawn positions (same as server uses)
-      const defaultSpawnPositions = [
-        { x: 11, y: 11 },
-        { x: 12, y: 11 },
-        { x: 13, y: 11 },
-        { x: 14, y: 11 },
-      ];
-      const spawnPos = defaultSpawnPositions[i] || { x: 11 + i, y: 11 };
-      chasers3D[i] = createChaser3D(
-        "white",
-        spawnPos.x,
-        spawnPos.y,
-        spawnPos.x * CELL_SIZE + CHARACTER_OFFSET,
-        spawnPos.y * CELL_SIZE + CHARACTER_OFFSET
-      );
-      // Set initial opacity to 20% (not player-controlled)
-      if (chasers3D[i] && chasers3D[i].mesh) {
-        chasers3D[i].mesh.traverse((child) => {
-          if (child instanceof THREE.Mesh && child.material) {
-            child.material.opacity = 0.2;
-            child.material.transparent = true;
-          }
-        });
-        // Set light intensity to 20%
-        if (chasers3D[i].mesh.children) {
-          chasers3D[i].mesh.children.forEach((child) => {
-            if (child instanceof THREE.PointLight) {
-              child.intensity = 20;
-            }
-          });
-        }
-      }
-    } else if (chasers3D[i] && !activeChaserIndices.has(i)) {
-      // Chaser exists but not in active list - set to 20% opacity
-      if (chasers3D[i].mesh) {
-        chasers3D[i].mesh.traverse((child) => {
-          if (child instanceof THREE.Mesh && child.material) {
-            child.material.opacity = 0.2;
-            child.material.transparent = true;
-          }
-        });
-        if (chasers3D[i].mesh.children) {
-          chasers3D[i].mesh.children.forEach((child) => {
-            if (child instanceof THREE.PointLight) {
-              child.intensity = 20;
-            }
-          });
-        }
-      }
-    }
-  }
+  // Don't create chasers that aren't in the active list - only create what's needed
 
   // Remove chasers that are no longer active (not selected by anyone)
   chasers3D.forEach((chaser, index) => {
@@ -567,8 +528,21 @@ function onWindowResize3D() {
   
   // Use canvas container dimensions for proper aspect ratio
   const container = canvas.parentElement;
-  const containerWidth = container ? container.clientWidth : window.innerWidth;
-  const containerHeight = container ? container.clientHeight : window.innerHeight;
+  let containerWidth = container ? container.clientWidth : window.innerWidth;
+  let containerHeight = container ? container.clientHeight : window.innerHeight;
+  
+  // If container dimensions are 0, use canvas dimensions or window dimensions
+  if (containerWidth === 0 || containerHeight === 0) {
+    containerWidth = canvas.clientWidth || window.innerWidth;
+    containerHeight = canvas.clientHeight || window.innerHeight;
+  }
+  
+  // Ensure we have valid dimensions
+  if (containerWidth === 0 || containerHeight === 0) {
+    console.warn("[3d] Container dimensions are 0, skipping resize");
+    return;
+  }
+  
   const aspect = containerWidth / containerHeight;
 
   if (useOrthographic && orthographicCamera) {
@@ -611,9 +585,18 @@ function toggleCamera() {
   return useOrthographic;
 }
 
+let renderCallCount = 0;
 function render3D() {
   if (renderer && scene && camera) {
     renderer.render(scene, camera);
+    renderCallCount++;
+    if (renderCallCount % 60 === 0) {
+      console.log("[3d] Render called", renderCallCount, "times. Scene children:", scene.children.length, "Camera pos:", camera.position.x, camera.position.y, camera.position.z);
+    }
+  } else {
+    if (!renderer) console.warn("[3d] Renderer not initialized");
+    if (!scene) console.warn("[3d] Scene not initialized");
+    if (!camera) console.warn("[3d] Camera not initialized");
   }
 }
 

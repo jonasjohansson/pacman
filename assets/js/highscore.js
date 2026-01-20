@@ -30,10 +30,27 @@ function getHTTPServerAddress() {
   return REMOTE_SERVER_ADDRESS;
 }
 
-async function loadHighscore() {
-  const loadingEl = document.getElementById("loading");
-  const contentEl = document.getElementById("highscore-content");
-  const noHighscoreEl = document.getElementById("no-highscore");
+async function loadHighscore(containerSelector = null) {
+  // If containerSelector is provided, use it; otherwise use document (for standalone)
+  const container = containerSelector 
+    ? (typeof containerSelector === "string" 
+        ? document.querySelector(containerSelector) 
+        : containerSelector)
+    : document;
+  
+  if (!container) {
+    console.error("Highscore module: Container not found:", containerSelector);
+    return;
+  }
+
+  const loadingEl = container.querySelector("#loading") || container.getElementById?.("loading");
+  const contentEl = container.querySelector("#highscore-content") || container.getElementById?.("highscore-content");
+  const noHighscoreEl = container.querySelector("#no-highscore") || container.getElementById?.("no-highscore");
+  
+  if (!loadingEl || !contentEl || !noHighscoreEl) {
+    console.error("Highscore module: Required elements not found in container");
+    return;
+  }
   
   try {
     const serverAddress = getHTTPServerAddress();
@@ -84,7 +101,38 @@ async function loadHighscore() {
   }
 }
 
-// Load highscore on page load
+// Export initialization function for module usage
+export function initHighscoreModule(containerSelector = "body") {
+  const container = typeof containerSelector === "string" 
+    ? document.querySelector(containerSelector) 
+    : containerSelector;
+  
+  if (!container) {
+    console.error("Highscore module: Container not found:", containerSelector);
+    return;
+  }
+
+  // Store container for refresh function
+  window.highscoreContainer = containerSelector;
+
+  // Load highscore immediately
+  loadHighscore(containerSelector);
+  
+  // Refresh every 5 seconds
+  setInterval(() => loadHighscore(containerSelector), 5000);
+}
+
+// Export refresh function
+export function refreshHighscore() {
+  if (window.highscoreContainer) {
+    loadHighscore(window.highscoreContainer);
+  }
+}
+
+// Make refresh function globally available
+window.refreshHighscore = refreshHighscore;
+
+// Auto-initialize if running standalone (not imported as module)
 document.addEventListener("DOMContentLoaded", () => {
   loadHighscore();
   

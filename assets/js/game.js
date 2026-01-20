@@ -15,6 +15,12 @@ const DIRECTIONS = [
   { dir: "left", x: -1, y: 0 },
   { dir: "right", x: 1, y: 0 },
 ];
+const DIRECTION_MAP = {
+  up: { x: 0, y: -1 },
+  down: { x: 0, y: 1 },
+  left: { x: -1, y: 0 },
+  right: { x: 1, y: 0 },
+};
 const OPPOSITE_DIR = {
   up: "down",
   down: "up",
@@ -831,73 +837,6 @@ function updateDebugDisplay() {
   }
 }
 
-// Debug display functions
-function createDebugDisplay() {
-  removeDebugDisplay(); // Remove existing if any
-  
-  const debugDiv = document.createElement("div");
-  debugDiv.id = "debug-display";
-  debugDiv.style.position = "fixed";
-  debugDiv.style.top = "10px";
-  debugDiv.style.left = "10px";
-  debugDiv.style.backgroundColor = "rgba(0, 0, 0, 0.8)";
-  debugDiv.style.color = "#0f0";
-  debugDiv.style.fontFamily = "monospace";
-  debugDiv.style.fontSize = "12px";
-  debugDiv.style.padding = "10px";
-  debugDiv.style.borderRadius = "5px";
-  debugDiv.style.zIndex = "10000";
-  debugDiv.style.pointerEvents = "none";
-  document.body.appendChild(debugDiv);
-  
-  // Start update loop
-  updateDebugDisplay();
-}
-
-function removeDebugDisplay() {
-  const debugDiv = document.getElementById("debug-display");
-  if (debugDiv) {
-    debugDiv.remove();
-  }
-}
-
-function updateDebugDisplay() {
-  const debugDiv = document.getElementById("debug-display");
-  if (!debugDiv || !guiParams.showDebug) return;
-  
-  const now = Date.now();
-  const fps = animationId ? Math.round(1000 / 16) : 0; // Approximate
-  
-  // Calculate ping (simulate with round-trip)
-  const ping = inputResponseTime > 0 ? Math.round(inputResponseTime / 2) : 0;
-  
-  let html = `<strong>DEBUG INFO</strong><br>`;
-  html += `─────────────────────<br>`;
-  html += `FPS: ${fps}<br>`;
-  html += `Ping: ${ping}ms<br>`;
-  html += `Server Update: ${serverUpdateInterval}ms<br>`;
-  html += `Input Response: ${inputResponseTime}ms<br>`;
-  html += `─────────────────────<br>`;
-  html += `Connected: ${multiplayerMode ? "Yes" : "No"}<br>`;
-  html += `Player ID: ${myPlayerId || "None"}<br>`;
-  html += `Character: ${myCharacterType || "None"}<br>`;
-  html += `Color Index: ${myColorIndex !== null ? myColorIndex : "None"}<br>`;
-  html += `─────────────────────<br>`;
-  
-  if (myColorIndex !== null && chasers[myColorIndex]) {
-    const chaser = chasers[myColorIndex];
-    html += `Position: (${chaser.x}, ${chaser.y})<br>`;
-    html += `Target: (${chaser.targetX}, ${chaser.targetY})<br>`;
-    html += `Pixel: (${Math.round(chaser.px)}, ${Math.round(chaser.py)})<br>`;
-  }
-  
-  debugDiv.innerHTML = html;
-  
-  if (false) { // Debug display removed
-    setTimeout(updateDebugDisplay, 100); // Update every 100ms
-  }
-}
-
 function updateAvailableColors(availableColors) {
   // Update character selection controllers (radio-like) based on availability
   if (window.characterControllers) {
@@ -1011,15 +950,15 @@ function init3DView() {
   }, 0);
 
   // Initialize 3D wall colors and path color from current GUI params
-  if (window.render3D) {
+  if (window.render3D && window.guiParams) {
     if (window.render3D.setInnerWallColor) {
-      window.render3D.setInnerWallColor(guiParams.innerWallColor);
+      window.render3D.setInnerWallColor(window.guiParams.innerWallColor);
     }
     if (window.render3D.setOuterWallColor) {
-      window.render3D.setOuterWallColor(guiParams.outerWallColor);
+      window.render3D.setOuterWallColor(window.guiParams.outerWallColor);
     }
     if (window.render3D.setPathColor) {
-      window.render3D.setPathColor(guiParams.pathColor);
+      window.render3D.setPathColor(window.guiParams.pathColor);
     }
     // Initialize team images from config
     COLORS.forEach((colorName, colorIndex) => {
@@ -1032,7 +971,7 @@ function init3DView() {
     });
     // Initialize camera zoom
     if (window.render3D.setCameraZoom) {
-      window.render3D.setCameraZoom(guiParams.cameraZoom);
+      window.render3D.setCameraZoom(window.guiParams.cameraZoom);
     }
   }
 }
@@ -1055,41 +994,72 @@ function isMyCharacter(characterType, colorIndex) {
   return multiplayerMode && myCharacterType === characterType && myColorIndex === colorIndex;
 }
 
+// Local mode flag - when true, game runs entirely client-side without server
+// Check if we're in browser view (has browser-controls-overlay element)
+let localMode = typeof document !== 'undefined' && document.getElementById('controller-panel')?.classList.contains('browser-controls-overlay');
+let localGameLoopId = null;
+let localGameState = {
+  fugitives: [],
+  chasers: [],
+  gameStarted: false,
+  gameStartTime: null,
+  gameDuration: 90,
+  caughtFugitives: new Set(),
+  score: 0,
+  fugitiveSpeed: 0.4,
+  chaserSpeed: 0.41,
+  aiDifficulty: 0.8,
+};
+let localPlayerInput = null;
+let localLastInputTime = 0;
+
 // Initialize game
 function init() {
   try {
-    // Initialize WebSocket connection
-    initWebSocket();
+    // Skip initialization if already in local mode (browser view handles its own initialization)
+    if (localMode) {
+      console.log("[game] Skipping init() - already in local mode");
+      return;
+    }
+    
+    // Only initialize WebSocket if not in local mode
+    if (!localMode) {
+      initWebSocket();
+    }
 
   // Initialize default settings
   aiDifficulty = 0.8;
   
-  // Initialize GUI for 2D/3D, Style, and Building settings only
-  if (typeof lil !== "undefined" && typeof lil.GUI !== "undefined") {
-    const guiContainer = document.getElementById("gui-container");
-    const GUI = lil.GUI;
-    if (gui) gui.destroy(); // Destroy existing GUI if any
-    gui = new GUI({ container: guiContainer });
-
-    // Make guiParams global so it can be accessed by updateCharacterAppearance
+  // Initialize default guiParams (needed for 3D initialization even without GUI)
+  if (!window.guiParams) {
     window.guiParams = {
-      camera3D: "Orthographic", // Camera type for 3D view
-      cameraZoom: 0.98, // Camera zoom level (0.5 to 2.0)
-      ambientLightIntensity: 0.6, // Global ambient light intensity
-      directionalLightIntensity: 0.3, // Global directional light intensity
-      pointLightIntensity: 100, // Point light intensity for characters (0-400 range)
-      pathColor: "#dddddd", // Path/floor color in hex (light gray)
-      innerWallColor: "#ffffff", // Inner wall color in hex (white)
-      outerWallColor: "#ffffff", // Outer wall color in hex (white)
-      bodyBackgroundColor: "#555555", // Body background color in hex
-      buildingRealOpacity: 1.0, // Building real image opacity (0-1)
-      buildingRealX: 0, // Building real image X position offset (px)
-      buildingRealY: 0, // Building real image Y position offset (px)
-      buildingRealBlendMode: "normal", // Building real image blend mode
-      canvasBlendMode: "hard-light", // WebGL canvas blend mode
-      canvasX: -14, // Canvas X position offset (px)
-      canvasY: -13, // Canvas Y position offset (px)
+      camera3D: "Orthographic",
+      cameraZoom: 0.98,
+      ambientLightIntensity: 0.6,
+      directionalLightIntensity: 0.3,
+      pointLightIntensity: 100,
+      pathColor: "#dddddd",
+      innerWallColor: "#ffffff",
+      outerWallColor: "#ffffff",
+      bodyBackgroundColor: "#555555",
+      buildingRealOpacity: 1.0,
+      buildingRealX: 0,
+      buildingRealY: 0,
+      buildingRealBlendMode: "normal",
+      canvasBlendMode: "hard-light",
+      canvasX: -14,
+      canvasY: -13,
     };
+  }
+  
+  // Initialize GUI for 2D/3D, Style, and Building settings only
+  // Skip GUI in local mode or if gui-container doesn't exist
+  if (!localMode && typeof lil !== "undefined" && typeof lil.GUI !== "undefined") {
+    const guiContainer = document.getElementById("gui-container");
+    if (guiContainer) {
+      const GUI = lil.GUI;
+      if (gui) gui.destroy(); // Destroy existing GUI if any
+      gui = new GUI({ container: guiContainer });
 
 
     // 3D camera type toggle
@@ -1329,6 +1299,12 @@ function init() {
 
     // Initialize 3D view on startup
     init3DView();
+    }
+  } else {
+    // In local mode or when GUI is not available, still initialize 3D view
+    if (localMode) {
+      init3DView();
+    }
   }
 
   // Create 4 fugitives in corners
@@ -1420,12 +1396,19 @@ function init() {
 
   // Render loop - smooths visual positions toward server state
   // Server sends authoritative pixel positions; we interpolate for smoother motion
+  let renderCallCount = 0;
   function renderLoop() {
     // Render 3D if enabled
-    if (window.render3D) {
+    if (window.render3D && window.render3D.render) {
       window.render3D.render();
+      renderCallCount++;
+      if (renderCallCount % 60 === 0) {
+        console.log("[game] Render called", renderCallCount, "times. Scene children:", window.render3D.scene?.children?.length || "unknown");
+      }
       animationId = requestAnimationFrame(renderLoop);
       return;
+    } else if (!window.render3D) {
+      console.warn("[game] Render3D not available yet");
     }
 
     // 2D rendering removed - all rendering is handled by WebGL/3D
@@ -1468,9 +1451,6 @@ function init() {
       }, 50);
       return;
     }
-  });
-  document.addEventListener("keyup", (e) => {
-    keys[e.key] = false;
   });
 
   // Start the render loop
@@ -1852,18 +1832,497 @@ function setupCanvasDragDrop() {
   });
 }
 
-// Start game when everything is loaded
-if (document.readyState === "loading") {
-  document.addEventListener("DOMContentLoaded", () => {
-    // Wait a bit for lil-gui to load
-    setTimeout(init, 100);
-    // Setup dome entry handler
-    setTimeout(setupDomeEntry, 200);
-    // Setup canvas drag and drop
-    setTimeout(setupCanvasDragDrop, 200);
+// ========== LOCAL MODE FUNCTIONS ==========
+// These functions enable client-side-only single-player gameplay
+
+// Local game loop (runs entirely client-side)
+let localLastUpdate = Date.now();
+function localGameLoop() {
+  const now = Date.now();
+  const deltaTime = now - localLastUpdate;
+  const deltaSeconds = deltaTime / 1000;
+  localLastUpdate = now;
+
+  if (!localGameState.gameStarted) {
+    localGameLoopId = requestAnimationFrame(localGameLoop);
+    return;
+  }
+
+  // Check game timer
+  if (localGameState.gameStartTime) {
+    const elapsed = (now - localGameState.gameStartTime) / 1000;
+    if (elapsed >= localGameState.gameDuration) {
+      localEndGame(false);
+      return;
+    }
+  }
+
+  // Process player input
+  if (localPlayerInput && localGameState.chasers[0]) {
+    const chaser = localGameState.chasers[0];
+    const dirDef = DIRECTION_MAP[localPlayerInput];
+    if (dirDef) {
+      chaser.nextDirX = dirDef.x;
+      chaser.nextDirY = dirDef.y;
+
+      // If stopped, try to start immediately
+      if (chaser.dirX === 0 && chaser.dirY === 0) {
+        const startX = chaser.x + dirDef.x;
+        const startY = chaser.y + dirDef.y;
+        if (isPath(startX, startY)) {
+          chaser.dirX = dirDef.x;
+          chaser.dirY = dirDef.y;
+          chaser.targetX = startX;
+          chaser.targetY = startY;
+        }
+      }
+    }
+    localPlayerInput = null;
+  }
+
+  // Move fugitives
+  localGameState.fugitives.forEach((fugitive, index) => {
+    if (localGameState.caughtFugitives.has(index)) return;
+
+    moveCharacter(fugitive, localGameState.fugitiveSpeed);
+
+    if (isAtTarget(fugitive)) {
+      localMoveFugitiveAI(fugitive, index);
+      
+      // Apply queued direction
+      if (fugitive.nextDirX || fugitive.nextDirY) {
+        const desiredX = fugitive.x + fugitive.nextDirX;
+        const desiredY = fugitive.y + fugitive.nextDirY;
+        if (isPath(desiredX, desiredY)) {
+          fugitive.dirX = fugitive.nextDirX;
+          fugitive.dirY = fugitive.nextDirY;
+          fugitive.targetX = desiredX;
+          fugitive.targetY = desiredY;
+          fugitive.lastDirX = fugitive.dirX;
+          fugitive.lastDirY = fugitive.dirY;
+          fugitive.nextDirX = 0;
+          fugitive.nextDirY = 0;
+        }
+      }
+    }
   });
-} else {
-  setTimeout(init, 100);
+
+  // Move chaser
+  const chaser = localGameState.chasers[0];
+  if (chaser) {
+    moveCharacter(chaser, localGameState.chaserSpeed);
+
+    if (isAtTarget(chaser)) {
+      // Apply queued direction
+      if (chaser.nextDirX || chaser.nextDirY) {
+        const desiredX = chaser.x + chaser.nextDirX;
+        const desiredY = chaser.y + chaser.nextDirY;
+        if (isPath(desiredX, desiredY)) {
+          chaser.dirX = chaser.nextDirX;
+          chaser.dirY = chaser.nextDirY;
+          chaser.targetX = desiredX;
+          chaser.targetY = desiredY;
+          chaser.lastDirX = chaser.dirX;
+          chaser.lastDirY = chaser.dirY;
+          chaser.nextDirX = 0;
+          chaser.nextDirY = 0;
+        } else {
+          // Can't move in desired direction, try to continue
+          const continueX = chaser.x + chaser.dirX;
+          const continueY = chaser.y + chaser.dirY;
+          if (isPath(continueX, continueY)) {
+            chaser.targetX = continueX;
+            chaser.targetY = continueY;
+          } else {
+            chaser.dirX = 0;
+            chaser.dirY = 0;
+          }
+        }
+      } else {
+        // No input, try to continue
+        const continueX = chaser.x + chaser.dirX;
+        const continueY = chaser.y + chaser.dirY;
+        if (isPath(continueX, continueY)) {
+          chaser.targetX = continueX;
+          chaser.targetY = continueY;
+        } else {
+          chaser.dirX = 0;
+          chaser.dirY = 0;
+        }
+      }
+    }
+  }
+
+  // Check collisions
+  localCheckCollisions();
+
+  // Update 3D rendering
+  if (window.render3D && window.render3D.updatePositions) {
+    const positions = {
+      fugitives: localGameState.fugitives.map((f, i) => ({
+        index: i,
+        px: f.px,
+        py: f.py,
+        x: f.x,
+        y: f.y,
+        targetX: f.targetX,
+        targetY: f.targetY,
+        color: f.color,
+        isPlayerControlled: false,
+      })),
+      chasers: localGameState.chasers.map((c, i) => ({
+        index: i,
+        px: c.px,
+        py: c.py,
+        x: c.x,
+        y: c.y,
+        targetX: c.targetX,
+        targetY: c.targetY,
+        color: c.color,
+        isPlayerControlled: true,
+      })),
+    };
+    window.render3D.updatePositions(positions);
+  }
+
+  localGameLoopId = requestAnimationFrame(localGameLoop);
+}
+
+// Local AI for fugitives (with randomness)
+function localMoveFugitiveAI(fugitive, index) {
+  if (localGameState.caughtFugitives.has(index)) return;
+
+  const chaser = localGameState.chasers[0];
+  if (!chaser) return;
+
+  const possibleMoves = [];
+  for (const dir of DIRECTIONS) {
+    const newX = fugitive.x + dir.x;
+    const newY = fugitive.y + dir.y;
+    if (isPath(newX, newY)) {
+      const isReversing = (dir.x === -fugitive.lastDirX && dir.y === -fugitive.lastDirY);
+      possibleMoves.push({ dir, newX, newY, isReversing });
+    }
+  }
+
+  if (possibleMoves.length === 0) return;
+
+  const nonReversingMoves = possibleMoves.filter(m => !m.isReversing);
+  const movesToConsider = nonReversingMoves.length > 0 ? nonReversingMoves : possibleMoves;
+  
+  if (Math.random() < 0.3 && movesToConsider.length > 0) {
+    const randomMove = movesToConsider[Math.floor(Math.random() * movesToConsider.length)];
+    fugitive.nextDirX = randomMove.dir.x;
+    fugitive.nextDirY = randomMove.dir.y;
+    return;
+  }
+
+  let bestDir = null;
+  let bestScore = -Infinity;
+
+  for (const move of possibleMoves) {
+    const newDx = move.newX - chaser.x;
+    const newDy = move.newY - chaser.y;
+    const newDistance = Math.sqrt(newDx * newDx + newDy * newDy);
+    const randomFactor = 0.8 + Math.random() * 0.4;
+    let score = newDistance * randomFactor;
+    
+    if (move.isReversing) {
+      score *= 0.7;
+    }
+
+    if (score > bestScore) {
+      bestScore = score;
+      bestDir = move.dir;
+    }
+  }
+
+  if (bestDir) {
+    fugitive.nextDirX = bestDir.x;
+    fugitive.nextDirY = bestDir.y;
+  }
+}
+
+function localCheckCollisions() {
+  const chaser = localGameState.chasers[0];
+  if (!chaser) return;
+
+  localGameState.fugitives.forEach((fugitive, index) => {
+    if (localGameState.caughtFugitives.has(index)) return;
+
+    const dx = chaser.x - fugitive.x;
+    const dy = chaser.y - fugitive.y;
+    const distanceSquared = dx * dx + dy * dy;
+
+    if (distanceSquared < 0.5) {
+      localCatchFugitive(index);
+    }
+  });
+}
+
+function localCatchFugitive(index) {
+  if (localGameState.caughtFugitives.has(index)) return;
+
+  localGameState.caughtFugitives.add(index);
+  
+  const elapsed = (Date.now() - localGameState.gameStartTime) / 1000;
+  const remaining = localGameState.fugitives.length - localGameState.caughtFugitives.size;
+  const timeBonus = Math.max(0, localGameState.gameDuration - elapsed);
+  const catchScore = Math.floor(1000 * (1 + timeBonus / 10) * (1 + remaining));
+  
+  localGameState.score += catchScore;
+
+  if (window.updateLocalScore) {
+    window.updateLocalScore(localGameState.score);
+  }
+
+  if (localGameState.caughtFugitives.size >= localGameState.fugitives.length) {
+    localEndGame(true);
+  }
+}
+
+function localEndGame(allCaught) {
+  localGameState.gameStarted = false;
+  
+  if (window.onLocalGameEnd) {
+    window.onLocalGameEnd({
+      score: localGameState.score,
+      allCaught,
+      gameTime: Date.now() - localGameState.gameStartTime,
+      fugitivesCaught: localGameState.caughtFugitives.size,
+      totalFugitives: localGameState.fugitives.length,
+    });
+  }
+}
+
+function localInitCharacters() {
+  localGameState.fugitives = fugitiveSpawnPositions.slice(0, 4).map((pos, i) => ({
+    x: pos.x,
+    y: pos.y,
+    px: pos.x * CELL_SIZE + CHARACTER_OFFSET,
+    py: pos.y * CELL_SIZE + CHARACTER_OFFSET,
+    targetX: pos.x,
+    targetY: pos.y,
+    color: COLORS[i],
+    speed: localGameState.fugitiveSpeed,
+    spawnPos: { ...pos },
+    dirX: 0,
+    dirY: 0,
+    nextDirX: 0,
+    nextDirY: 0,
+    lastDirX: 0,
+    lastDirY: 0,
+    positionHistory: [],
+  }));
+
+  const chaserPos = chaserSpawnPositions[0];
+  localGameState.chasers = [{
+    x: chaserPos.x,
+    y: chaserPos.y,
+    px: chaserPos.x * CELL_SIZE + CHARACTER_OFFSET,
+    py: chaserPos.y * CELL_SIZE + CHARACTER_OFFSET,
+    targetX: chaserPos.x,
+    targetY: chaserPos.y,
+    color: "white",
+    speed: localGameState.chaserSpeed,
+    spawnPos: { ...chaserPos },
+    dirX: 0,
+    dirY: 0,
+    nextDirX: 0,
+    nextDirY: 0,
+    lastDirY: 0,
+    positionHistory: [],
+  }];
+}
+
+// Public API for local mode
+// Initialize characters and make them visible (but don't start game loop)
+export function initLocalCharacters() {
+  console.log("[game] Initializing local characters...");
+  
+  if (!window.render3D || !window.render3D.initialized) {
+    console.error("[game] 3D rendering not initialized!");
+    return;
+  }
+
+  // Set local mode first to prevent auto-init from running
+  localMode = true;
+
+  // Only initialize if not already initialized
+  if (localGameState.fugitives.length > 0 && localGameState.chasers.length > 0) {
+    console.log("[game] Characters already initialized, skipping");
+    return;
+  }
+  localInitCharacters();
+  
+  // Send positions to 3D renderer to make characters visible
+  if (window.render3D && window.render3D.updatePositions) {
+    const positions = {
+      fugitives: localGameState.fugitives.map((f, i) => ({
+        index: i,
+        px: f.px,
+        py: f.py,
+        x: f.x,
+        y: f.y,
+        targetX: f.targetX,
+        targetY: f.targetY,
+        color: f.color,
+        isPlayerControlled: false,
+      })),
+      chasers: localGameState.chasers.map((c, i) => ({
+        index: i,
+        px: c.px,
+        py: c.py,
+        x: c.x,
+        y: c.y,
+        targetX: c.targetX,
+        targetY: c.targetY,
+        color: c.color,
+        isPlayerControlled: true,
+      })),
+    };
+    window.render3D.updatePositions(positions);
+    console.log("[game] Characters initialized and visible");
+  }
+}
+
+export function initLocalGame() {
+  console.log("[game] Starting local game...");
+  
+  if (!window.render3D || !window.render3D.initialized) {
+    console.error("[game] 3D rendering not initialized!");
+    return;
+  }
+
+  // Characters should already be initialized, but ensure they exist
+  if (localGameState.fugitives.length === 0 || localGameState.chasers.length === 0) {
+    localInitCharacters();
+  }
+  
+  // Reset game state
+  localGameState.gameStarted = true;
+  localGameState.gameStartTime = Date.now();
+  localGameState.score = 0;
+  localGameState.caughtFugitives.clear();
+  
+  // Reset fugitives to spawn positions
+  localGameState.fugitives.forEach((f, i) => {
+    const pos = fugitiveSpawnPositions[i];
+    f.x = pos.x;
+    f.y = pos.y;
+    f.px = pos.x * CELL_SIZE + CHARACTER_OFFSET;
+    f.py = pos.y * CELL_SIZE + CHARACTER_OFFSET;
+    f.targetX = pos.x;
+    f.targetY = pos.y;
+    f.dirX = 0;
+    f.dirY = 0;
+    f.nextDirX = 0;
+    f.nextDirY = 0;
+    f.lastDirX = 0;
+    f.lastDirY = 0;
+  });
+
+  // Reset chaser to spawn position
+  const chaserPos = chaserSpawnPositions[0];
+  if (localGameState.chasers[0]) {
+    localGameState.chasers[0].x = chaserPos.x;
+    localGameState.chasers[0].y = chaserPos.y;
+    localGameState.chasers[0].px = chaserPos.x * CELL_SIZE + CHARACTER_OFFSET;
+    localGameState.chasers[0].py = chaserPos.y * CELL_SIZE + CHARACTER_OFFSET;
+    localGameState.chasers[0].targetX = chaserPos.x;
+    localGameState.chasers[0].targetY = chaserPos.y;
+    localGameState.chasers[0].dirX = 0;
+    localGameState.chasers[0].dirY = 0;
+    localGameState.chasers[0].nextDirX = 0;
+    localGameState.chasers[0].nextDirY = 0;
+  }
+
+  // Update 3D positions (characters should already exist, just update their positions)
+  if (window.render3D && window.render3D.updatePositions) {
+    const positions = {
+      fugitives: localGameState.fugitives.map((f, i) => ({
+        index: i,
+        px: f.px,
+        py: f.py,
+        x: f.x,
+        y: f.y,
+        targetX: f.targetX,
+        targetY: f.targetY,
+        color: f.color,
+        isPlayerControlled: false,
+      })),
+      chasers: localGameState.chasers.map((c, i) => ({
+        index: i,
+        px: c.px,
+        py: c.py,
+        x: c.x,
+        y: c.y,
+        targetX: c.targetX,
+        targetY: c.targetY,
+        color: c.color,
+        isPlayerControlled: true,
+      })),
+    };
+    window.render3D.updatePositions(positions);
+  }
+
+  localLastUpdate = Date.now();
+  if (localGameLoopId) cancelAnimationFrame(localGameLoopId);
+  localGameLoop();
+}
+
+export function sendLocalInput(dir) {
+  const now = Date.now();
+  if (now - localLastInputTime < 30) return;
+  localLastInputTime = now;
+  localPlayerInput = dir;
+}
+
+export function getLocalGameState() {
+  return {
+    score: localGameState.score,
+    gameStarted: localGameState.gameStarted,
+    caughtFugitives: localGameState.caughtFugitives.size,
+    totalFugitives: localGameState.fugitives.length,
+  };
+}
+
+// Start game when everything is loaded
+// Export initialization function for module usage
+export function initGameModule(containerSelector = "body") {
+  const container = typeof containerSelector === "string" 
+    ? document.querySelector(containerSelector) 
+    : containerSelector;
+  
+  if (!container) {
+    console.error("Game module: Container not found:", containerSelector);
+    return;
+  }
+
+  // Initialize the game
+  init();
+  
+  // Setup dome entry handler
   setTimeout(setupDomeEntry, 200);
+  // Setup canvas drag and drop
   setTimeout(setupCanvasDragDrop, 200);
+}
+
+// Auto-initialize if running standalone (not imported as module)
+// Skip auto-init if we're in browser view (local mode will be set before this runs)
+if (!localMode) {
+  if (document.readyState === "loading") {
+    document.addEventListener("DOMContentLoaded", () => {
+      // Wait a bit for lil-gui to load
+      setTimeout(init, 100);
+      // Setup dome entry handler
+      setTimeout(setupDomeEntry, 200);
+      // Setup canvas drag and drop
+      setTimeout(setupCanvasDragDrop, 200);
+    });
+  } else {
+    setTimeout(init, 100);
+    setTimeout(setupDomeEntry, 200);
+    setTimeout(setupCanvasDragDrop, 200);
+  }
 }
