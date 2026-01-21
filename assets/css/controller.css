@@ -1,119 +1,42 @@
 @import url("./global.css");
 
-* {
-  -webkit-tap-highlight-color: transparent;
-  touch-action: none;
-}
-
 body {
   background: white;
   color: black;
-  height: 100vh;
-  overflow: hidden;
-  display: flex;
-  flex-direction: column;
+  margin: 0;
+  padding: var(--spacing-lg);
   text-transform: uppercase;
 }
 
 .welcome-message {
-  padding: var(--spacing-md);
-  text-align: center;
-  flex-shrink: 0;
-  text-transform: none; /* Override body's uppercase */
+  margin-bottom: var(--spacing-lg);
+  line-height: 1.4;
 }
-
-.top-bar {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  padding: var(--spacing-md);
-  border-bottom: var(--border-width) solid black;
-  flex-shrink: 0;
-}
-
 
 .chaser-select {
   display: grid;
   grid-template-columns: 1fr 1fr;
-  gap: 0;
-  border-bottom: var(--border-width) solid black;
-  flex-shrink: 0;
-}
-
-.chaser-select.game-started {
-  /* Keep 2 rows visible when game starts */
-}
-
-
-.chaser-btn.start-btn {
-  grid-column: 2;
-  grid-row: 1;
+  border: var(--border-width) solid black;
+  margin-bottom: var(--spacing-lg);
 }
 
 .score-display {
   padding: var(--spacing-lg);
-  text-align: center;
-  border-top: var(--border-width) solid black;
-  border-left: var(--border-width) solid black;
   border-right: var(--border-width) solid black;
-  border-bottom: none;
   display: flex;
   align-items: center;
   justify-content: center;
-  grid-column: 1;
-  grid-row: 1;
 }
 
-.chaser-select.hidden {
-  display: none;
-}
-
-.chaser-btn {
+.chaser-btn.start-btn {
   padding: var(--spacing-lg);
   background: white;
-  border-top: var(--border-width) solid black;
-  border-left: none;
-  border-right: var(--border-width) solid black;
-  border-bottom: none;
+  border: none;
+  border-left: var(--border-width) solid black;
   color: black;
   cursor: pointer;
   text-align: center;
-}
-
-.chaser-btn[data-index="0"] {
-  grid-column: 1;
-  grid-row: 2;
-}
-
-.chaser-btn[data-index="1"] {
-  grid-column: 2;
-  grid-row: 2;
-}
-
-.chaser-btn[data-index="2"] {
-  grid-column: 3;
-  grid-row: 2;
-}
-
-.chaser-btn[data-index="3"] {
-  grid-column: 4;
-  grid-row: 2;
-}
-
-
-.chaser-btn.available {
-  background: white;
-}
-
-.chaser-btn.selected {
-  background: black;
-  color: white;
-}
-
-.chaser-btn.taken {
-  background: white;
-  opacity: 0.3;
-  cursor: not-allowed;
+  white-space: nowrap;
 }
 
 .chaser-btn.start-btn.disabled {
@@ -122,27 +45,28 @@ body {
 }
 
 .joystick-container {
-  flex: 1;
   display: flex;
   align-items: center;
   justify-content: center;
-  position: relative;
-  touch-action: none;
+  margin-top: var(--spacing-lg);
 }
 
 .joystick-base {
   width: 50vw;
   height: 50vw;
-  max-width: 500px;
-  max-height: 500px;
+  max-width: 400px;
+  max-height: 400px;
   background: white;
   border: var(--border-width) solid black;
   position: relative;
   touch-action: none;
+  -webkit-touch-callout: none;
+  -webkit-user-select: none;
+  user-select: none;
 }
 
 .joystick-base::before {
-  content: '';
+  content: "";
   position: absolute;
   top: 50%;
   left: 0;
@@ -153,7 +77,7 @@ body {
 }
 
 .joystick-base::after {
-  content: '';
+  content: "";
   position: absolute;
   left: 50%;
   top: 0;
@@ -169,15 +93,27 @@ body {
   max-width: 150px;
   max-height: 150px;
   background: black;
+  border-radius: 50%;
   position: absolute;
   top: 50%;
   left: 50%;
   transform: translate(-50%, -50%);
-  transition: transform 0.1s;
-  touch-action: none;
+  transition: transform 0.1s ease-out;
 }
 
 .joystick-handle.active {
   background: black;
+}
+
+@media (max-width: 600px) {
+  .joystick-base {
+    width: 60vw;
+    height: 60vw;
+  }
+
+  .joystick-handle {
+    width: 20vw;
+    height: 20vw;
+  }
 }
 

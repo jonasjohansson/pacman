@@ -9,8 +9,9 @@
 body {
   background: white;
   color: black;
-  overflow: auto;
-  min-height: 100vh;
+  overflow: hidden;
+  height: 100vh;
+  height: 100dvh; /* Use dynamic viewport height to account for address bar */
   width: 100vw;
   text-transform: uppercase;
 }
@@ -41,10 +42,13 @@ body {
 }
 
 .browser-container {
-  position: relative;
-  min-width: 100vw;
-  min-height: 100vh;
-  overflow: auto;
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100vw;
+  height: 100vh;
+  height: 100dvh; /* Use dynamic viewport height to account for address bar */
+  overflow: hidden;
 }
 
 .browser-panel {
@@ -55,9 +59,9 @@ body {
 .browser-panel-center {
   background-color: #ffffff;
   position: relative;
-  overflow: auto;
-  min-width: 100%;
-  min-height: 100%;
+  overflow: hidden;
+  width: 100%;
+  height: 100%;
 }
 
 /* Game Panel Styles */
@@ -100,7 +104,8 @@ body {
 
 #game-panel #webgl-canvas {
   position: relative;
-  height: 100vh !important;  /* Fill available height */
+  height: 100vh !important;
+  height: 100dvh !important; /* Use dynamic viewport height to account for address bar */
   width: auto !important;    /* Let width be determined by aspect */
   max-width: 100vw;          /* Don't overflow horizontally */
   z-index: 7; /* Above building-real-image (z-index: 6), below controls (z-index: 1000) */
@@ -128,23 +133,22 @@ body {
   mix-blend-mode: normal;
 }
 
-/* Overlay Controls (Bottom Right) */
+/* Overlay Controls - Play button centered */
 .browser-controls-overlay {
   position: absolute;
-  bottom: max(20px, env(safe-area-inset-bottom, 20px));
-  right: max(20px, env(safe-area-inset-right, 20px));
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
   display: flex;
-  flex-direction: column;
   align-items: center;
-  gap: 12px;
+  justify-content: center;
   z-index: 1000;
-  max-width: calc(100vw - 40px);
-  max-height: calc(100vh - 40px);
-  overflow: visible;
+  pointer-events: none; /* let underlying canvas receive events except on button */
 }
 
 .browser-controls-overlay > * {
-  pointer-events: auto;
+  pointer-events: auto; /* re-enable events on children like the play button */
 }
 
 #controller-panel .chaser-btn.start-btn {
@@ -167,119 +171,45 @@ body {
 }
 
 #controller-panel .chaser-btn.start-btn.disabled {
-  opacity: 0.5;
+  opacity: 0;
   cursor: default;
-}
-
-#controller-panel .joystick-container {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  position: relative;
-  touch-action: none;
-}
-
-#controller-panel .joystick-container.disabled {
-  opacity: 0.5;
   pointer-events: none;
+  transition: opacity 0.2s ease-out;
 }
 
-#controller-panel .joystick-base {
-  width: min(30vw, 30vh, 300px);
-  height: min(30vw, 30vh, 300px);
-  max-width: min(300px, calc(100vw - 80px));
-  max-height: min(300px, calc(100vh - 80px));
-  background: white;
-  border: var(--border-width) solid black;
-  position: relative;
-  touch-action: none;
-  -webkit-touch-callout: none;
-  -webkit-user-select: none;
-  user-select: none;
-  opacity: 0.5;
-  cursor: pointer;
-}
-
-#controller-panel .joystick-base::before {
-  content: '';
-  position: absolute;
-  top: 50%;
-  left: 0;
-  right: 0;
-  height: var(--border-width);
-  background: black;
-  transform: translateY(-50%);
-}
-
-#controller-panel .joystick-base::after {
-  content: '';
-  position: absolute;
-  left: 50%;
-  top: 0;
-  bottom: 0;
-  width: var(--border-width);
-  background: black;
-  transform: translateX(-50%);
-}
-
-#controller-panel .joystick-handle {
-  touch-action: none;
-  -webkit-touch-callout: none;
-  -webkit-user-select: none;
-  user-select: none;
-  width: 9vw;
-  height: 9vw;
-  max-width: 90px;
-  max-height: 90px;
-  background: black;
-  position: absolute;
-  top: 50%;
-  left: 50%;
-  transform: translate(-50%, -50%);
-  transition: transform 0.1s;
-  touch-action: none;
-}
-
-#controller-panel .joystick-handle.active {
-  background: black;
-}
+/* Joystick removed in browser view; swipe controls are used instead */
 
 /* Responsive Design */
 @media (max-width: 900px) {
   .browser-controls-overlay {
-    bottom: 15px;
-    right: 15px;
-    gap: 10px;
+    /* still centered; no bottom/right offsets needed */
   }
 }
 
 @media (max-width: 600px) {
   .browser-controls-overlay {
-    bottom: 10px;
-    right: 10px;
-    gap: 8px;
+    /* still centered; no bottom/right offsets needed */
   }
 }
 
 @media (max-width: 400px) {
   .browser-controls-overlay {
-    bottom: 8px;
-    right: 8px;
-    gap: 6px;
+    /* still centered; no bottom/right offsets needed */
   }
 }
 
 /* Score top-right */
 .score-top-right {
   position: absolute;
-  top: 12px;
-  right: 12px;
+  top: max(12px, env(safe-area-inset-top, 12px));
+  right: max(12px, env(safe-area-inset-right, 12px));
   z-index: 1001;
   background: transparent;
   border: none;
   color: black;
   font-size: 18px;
   font-weight: normal;
+  padding-top: env(safe-area-inset-top, 0);
   text-transform: uppercase;
   padding: 0;
   margin: 0;

@@ -1,11 +1,13 @@
 // Browser view - local single-player game
 import { initLocalGame, initLocalCharacters, sendLocalInput, getLocalGameState } from "./game.js";
-import { initDpad } from "./dpad.js";
 
 // Local game state
 let gameStarted = false;
 let playerName = null;
 let renderLoopId = null;
+let swipeStartX = null;
+let swipeStartY = null;
+const SWIPE_THRESHOLD = 30; // pixels
 
 function init3DView() {
   const canvas = document.getElementById("webgl-canvas");
@@ -30,6 +32,102 @@ function init3DView() {
       }
     }, 100);
   }
+}
+
+// Initialize swipe controls on the game canvas
+function initSwipeControls(canvas) {
+  console.log("[browser] Initializing swipe controls...");
+
+  const getDirectionFromDelta = (dx, dy) => {
+    if (Math.abs(dx) < SWIPE_THRESHOLD && Math.abs(dy) < SWIPE_THRESHOLD) {
+      return null;
+    }
+    if (Math.abs(dx) > Math.abs(dy)) {
+      return dx > 0 ? "right" : "left";
+    } else {
+      return dy > 0 ? "down" : "up";
+    }
+  };
+
+  let lastTouchDir = null;
+
+  canvas.addEventListener("touchstart", (e) => {
+    if (!gameStarted) return;
+    const touch = e.touches[0];
+    swipeStartX = touch.clientX;
+    swipeStartY = touch.clientY;
+    lastTouchDir = null;
+  }, { passive: true });
+
+  canvas.addEventListener("touchmove", (e) => {
+    if (!gameStarted || swipeStartX === null || swipeStartY === null) return;
+    const touch = e.touches[0];
+    const dx = touch.clientX - swipeStartX;
+    const dy = touch.clientY - swipeStartY;
+    const dir = getDirectionFromDelta(dx, dy);
+    if (dir && dir !== lastTouchDir) {
+      console.log("[browser] Touch move direction:", dir);
+      lastTouchDir = dir;
+      sendLocalInput(dir);
+    }
+  }, { passive: true });
+
+  canvas.addEventListener("touchend", (e) => {
+    if (!gameStarted || swipeStartX === null || swipeStartY === null) return;
+    const touch = e.changedTouches[0];
+    const dx = touch.clientX - swipeStartX;
+    const dy = touch.clientY - swipeStartY;
+    swipeStartX = null;
+    swipeStartY = null;
+    lastTouchDir = null;
+
+    const dir = getDirectionFromDelta(dx, dy);
+    if (dir) {
+      console.log("[browser] Swipe direction:", dir);
+      sendLocalInput(dir);
+    }
+  }, { passive: true });
+
+  // Optional: mouse support for desktop testing
+  let mouseDown = false;
+  let mouseStartX = null;
+  let mouseStartY = null;
+  let lastMouseDir = null;
+
+  canvas.addEventListener("mousedown", (e) => {
+    if (!gameStarted) return;
+    mouseDown = true;
+    mouseStartX = e.clientX;
+    mouseStartY = e.clientY;
+  });
+
+  canvas.addEventListener("mouseup", (e) => {
+    if (!gameStarted || !mouseDown) return;
+    mouseDown = false;
+    const dx = e.clientX - mouseStartX;
+    const dy = e.clientY - mouseStartY;
+    mouseStartX = null;
+    mouseStartY = null;
+    lastMouseDir = null;
+
+    const dir = getDirectionFromDelta(dx, dy);
+    if (dir) {
+      console.log("[browser] Mouse swipe direction:", dir);
+      sendLocalInput(dir);
+    }
+  });
+
+  canvas.addEventListener("mousemove", (e) => {
+    if (!gameStarted || !mouseDown) return;
+    const dx = e.clientX - mouseStartX;
+    const dy = e.clientY - mouseStartY;
+    const dir = getDirectionFromDelta(dx, dy);
+    if (dir && dir !== lastMouseDir) {
+      console.log("[browser] Mouse move direction:", dir);
+      lastMouseDir = dir;
+      sendLocalInput(dir);
+    }
+  });
 }
 
 function startRenderLoop() {
@@ -65,6 +163,18 @@ function initBrowser() {
         // Fit the level to the available canvas space
         fitLevelToCanvas();
       }, 200);
+      
+      // Listen for viewport changes (when address bar shows/hides)
+      if (window.visualViewport) {
+        window.visualViewport.addEventListener('resize', () => {
+          setTimeout(() => {
+            if (window.render3D && window.render3D.onResize) {
+              window.render3D.onResize();
+            }
+            fitLevelToCanvas();
+          }, 100);
+        });
+      }
       
       // Start render loop
       startRenderLoop();
@@ -130,8 +240,6 @@ function fitLevelToCanvas() {
 function initLocalController() {
   const startBtn = document.getElementById("start-btn");
   const scoreValue = document.getElementById("score-value");
-  const joystickBase = document.getElementById("joystick-base");
-  const joystickHandle = document.getElementById("joystick-handle");
 
   // Update score display
   window.updateLocalScore = (score) => {
@@ -165,12 +273,6 @@ function initLocalController() {
       startBtn.textContent = "Playing...";
       startBtn.classList.add("disabled");
 
-      // Enable joystick
-      const joystickContainer = document.getElementById("joystick-container");
-      if (joystickContainer) {
-        joystickContainer.classList.remove("disabled");
-      }
-
       // Initialize and start local game (with small delay to ensure 3D is ready)
       console.log("[browser] Starting local game...");
       setTimeout(() => {
@@ -187,13 +289,10 @@ function initLocalController() {
     }, { passive: false });
   }
 
-  // Initialize joystick
-  if (joystickBase && joystickHandle) {
-    initDpad("joystick-base", "joystick-handle", (dir) => {
-      if (gameStarted && dir) {
-        sendLocalInput(dir);
-      }
-    });
+  // Initialize swipe controls on the canvas
+  const canvas = document.getElementById("webgl-canvas");
+  if (canvas) {
+    initSwipeControls(canvas);
   }
 }
 
@@ -203,16 +302,11 @@ function initGameUI() {
     gameStarted = false;
     
     const startBtn = document.getElementById("start-btn");
-    const joystickContainer = document.getElementById("joystick-container");
 
     if (startBtn) {
       startBtn.disabled = false;
       startBtn.textContent = "Play Again";
       startBtn.classList.remove("disabled");
-    }
-
-    if (joystickContainer) {
-      joystickContainer.classList.add("disabled");
     }
 
     // Show game over message
