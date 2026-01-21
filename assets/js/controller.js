@@ -63,11 +63,15 @@ function getServerAddress() {
 }
 
 function promptForInitials() {
+  console.log("[promptForInitials] Starting prompt...");
   let initials = "";
   while (!initials || initials.length === 0) {
+    console.log("[promptForInitials] Showing prompt dialog...");
     const input = prompt("Enter your 3-letter initials:");
+    console.log("[promptForInitials] User entered:", input);
     if (input === null) {
       // User cancelled
+      console.log("[promptForInitials] User cancelled");
       return null;
     }
     initials = input.toUpperCase().replace(/[^A-Z]/g, "").slice(0, 3);
@@ -75,6 +79,7 @@ function promptForInitials() {
       alert("Please enter at least one letter.");
     }
   }
+  console.log("[promptForInitials] Returning initials:", initials);
   return initials || null;
 }
 
@@ -526,19 +531,38 @@ function updateScoreDisplay() {
 
 function autoAssignChaser() {
   console.log("[autoAssignChaser] availableChasers:", availableChasers, "takenChasers:", Array.from(takenChasers));
+  
+  // Ensure we have some chasers to work with
+  if (availableChasers.length === 0) {
+    console.log("[autoAssignChaser] No chasers in availableChasers, using defaults");
+    availableChasers = [0, 1, 2, 3];
+  }
+  
   // Find first available chaser that's not taken
   const availableChaser = availableChasers.find(index => !takenChasers.has(index));
   
   if (availableChaser === undefined) {
-    // No available chasers
-    console.log("[autoAssignChaser] No available chasers");
+    // No available chasers - try using first chaser anyway if all are taken
+    console.log("[autoAssignChaser] No available chasers found, trying first chaser");
+    if (availableChasers.length > 0) {
+      const firstChaser = availableChasers[0];
+      console.log("[autoAssignChaser] Using first chaser as fallback:", firstChaser);
+      // Still prompt for initials even if chaser might be taken - server will handle it
+      const initials = promptForInitials();
+      if (!initials) {
+        return null;
+      }
+      return { colorIndex: firstChaser, playerName: initials };
+    }
     alert("All chasers are occupied. Please wait for the current game to end.");
     return null;
   }
   
   console.log("[autoAssignChaser] Found available chaser:", availableChaser);
   // Prompt for initials
+  console.log("[autoAssignChaser] About to show prompt for initials...");
   const initials = promptForInitials();
+  console.log("[autoAssignChaser] Got initials:", initials);
   if (!initials) {
     console.log("[autoAssignChaser] User cancelled initials prompt");
     return null; // User cancelled
@@ -564,7 +588,9 @@ function joinAsChaser(colorIndex, playerName) {
   }
 
   // Prompt for game code
+  console.log("[joinAsChaser] About to show prompt for game code...");
   const gameCode = prompt("Enter the 2-digit game code:");
+  console.log("[joinAsChaser] User entered game code:", gameCode);
   if (!gameCode) {
     // User cancelled or entered nothing
     console.log("[joinAsChaser] User cancelled game code prompt");
@@ -616,14 +642,30 @@ function initElements() {
 function initEventListeners() {
   // Only handle the Play button click
   if (elements.startBtn) {
-    elements.startBtn.addEventListener("click", () => {
-      console.log("[Play button] Clicked - myColorIndex:", myColorIndex, "ws:", !!ws, "readyState:", ws?.readyState);
+    const handlePlayClick = (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      console.log("[Play button] Clicked - myColorIndex:", myColorIndex, "ws:", !!ws, "readyState:", ws?.readyState, "disabled:", elements.startBtn.disabled);
+      
+      // Check if button is disabled
+      if (elements.startBtn.disabled) {
+        console.log("[Play button] Button is disabled");
+        if (myColorIndex !== null) {
+          alert("You have already joined the game!");
+        } else if (availableChasers.length === 0 || availableChasers.every(index => takenChasers.has(index))) {
+          alert("All chasers are occupied. Please wait for the current game to end.");
+        }
+        return;
+      }
+      
       if (myColorIndex !== null) {
         console.log("[Play button] Already joined, ignoring click");
+        alert("You have already joined the game!");
         return; // Already joined
       }
       if (!ws || ws.readyState !== WebSocket.OPEN) {
         console.log("[Play button] WebSocket not ready");
+        alert("Connecting to server... Please wait a moment and try again.");
         return;
       }
       
@@ -632,6 +674,7 @@ function initEventListeners() {
       const assignment = autoAssignChaser();
       if (!assignment) {
         console.log("[Play button] No assignment (user cancelled or no chasers available)");
+        // Don't show alert here - autoAssignChaser already shows one if needed
         return; // No available chaser or user cancelled
       }
       
@@ -651,7 +694,14 @@ function initEventListeners() {
         selectedChaserName = assignment.playerName;
         joinAsChaser(assignment.colorIndex, assignment.playerName);
       }
-    });
+    };
+    
+    // Add both click and touch handlers for mobile compatibility
+    elements.startBtn.addEventListener("click", handlePlayClick);
+    elements.startBtn.addEventListener("touchend", (e) => {
+      e.preventDefault();
+      handlePlayClick(e);
+    }, { passive: false });
   }
 
   // Initialize shared D-pad component
@@ -700,4 +750,24 @@ window.testAlert = function() {
   console.log("[TEST] Testing alert function...");
   alert("Test alert - if you see this, alerts work!");
   console.log("[TEST] Alert was shown and dismissed");
+};
+
+// Test function to verify prompt works - can be called from console: testPrompt()
+window.testPrompt = function() {
+  console.log("[TEST] Testing prompt function...");
+  const result = prompt("Test prompt - enter something:");
+  console.log("[TEST] Prompt result:", result);
+  return result;
+};
+
+// Test function to manually trigger play button logic
+window.testPlayButton = function() {
+  console.log("[TEST] Testing play button logic...");
+  if (!elements.startBtn) {
+    console.error("[TEST] Start button element not found!");
+    return;
+  }
+  console.log("[TEST] Button found, triggering click handler...");
+  const event = new Event('click', { bubbles: true, cancelable: true });
+  elements.startBtn.dispatchEvent(event);
 };
