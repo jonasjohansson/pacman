@@ -1009,7 +1009,7 @@ let localGameState = {
   caughtFugitives: new Set(),
   score: 0,
   fugitiveSpeed: 0.4,
-  chaserSpeed: 0.43, // Slightly faster than fugitives
+  chaserSpeed: 0.45, // Slightly faster than fugitives
   aiDifficulty: 0.8,
 };
 let localPlayerInput = null;
@@ -1047,6 +1047,19 @@ function init() {
       cameraPosX: 0,
       cameraPosY: 0,
       cameraPosZ: 0,
+      // Orthographic camera frustum (useCustomOrtho = false means auto-calculated)
+      useCustomOrtho: false,
+      orthoLeft: -500,
+      orthoRight: 500,
+      orthoTop: 500,
+      orthoBottom: -500,
+      orthoNear: 0.1,
+      orthoFar: 1000,
+      // LookAt point (useCustomLookAt = false means center of level)
+      useCustomLookAt: false,
+      lookAtX: 420,
+      lookAtY: 0,
+      lookAtZ: 220,
       buildingRealOpacity: 1.0,
       buildingRealX: 0,
       buildingRealY: 0,
@@ -1112,6 +1125,87 @@ function init() {
       .add(guiParams, "cameraPosZ", -500, 500, 1)
       .name("Cam Z")
       .onChange(updateCameraPosition);
+
+    // Orthographic camera frustum controls
+    const orthoFolder = gui.addFolder("Orthographic Frustum");
+    const updateOrthoFrustum = () => {
+      if (window.render3D && window.render3D.setOrthographicFrustum) {
+        if (guiParams.useCustomOrtho) {
+          window.render3D.setOrthographicFrustum(
+            guiParams.orthoLeft,
+            guiParams.orthoRight,
+            guiParams.orthoTop,
+            guiParams.orthoBottom,
+            guiParams.orthoNear,
+            guiParams.orthoFar
+          );
+        } else {
+          // Reset to auto-calculated
+          window.render3D.setOrthographicFrustum(null, null, null, null, guiParams.orthoNear, guiParams.orthoFar);
+        }
+      }
+    };
+    orthoFolder
+      .add(guiParams, "useCustomOrtho")
+      .name("Use Custom Frustum")
+      .onChange(updateOrthoFrustum);
+    orthoFolder
+      .add(guiParams, "orthoLeft", -2000, 2000, 1)
+      .name("Left")
+      .onChange(updateOrthoFrustum);
+    orthoFolder
+      .add(guiParams, "orthoRight", -2000, 2000, 1)
+      .name("Right")
+      .onChange(updateOrthoFrustum);
+    orthoFolder
+      .add(guiParams, "orthoTop", -2000, 2000, 1)
+      .name("Top")
+      .onChange(updateOrthoFrustum);
+    orthoFolder
+      .add(guiParams, "orthoBottom", -2000, 2000, 1)
+      .name("Bottom")
+      .onChange(updateOrthoFrustum);
+    orthoFolder
+      .add(guiParams, "orthoNear", 0.01, 100, 0.01)
+      .name("Near")
+      .onChange(updateOrthoFrustum);
+    orthoFolder
+      .add(guiParams, "orthoFar", 100, 10000, 10)
+      .name("Far")
+      .onChange(updateOrthoFrustum);
+
+    // LookAt point controls
+    const lookAtFolder = gui.addFolder("Look At Point");
+    const updateLookAt = () => {
+      if (window.render3D && window.render3D.setLookAtPoint) {
+        if (guiParams.useCustomLookAt) {
+          window.render3D.setLookAtPoint(
+            guiParams.lookAtX,
+            guiParams.lookAtY,
+            guiParams.lookAtZ
+          );
+        } else {
+          // Reset to center of level
+          window.render3D.setLookAtPoint(null, 0, null);
+        }
+      }
+    };
+    lookAtFolder
+      .add(guiParams, "useCustomLookAt")
+      .name("Use Custom Look At")
+      .onChange(updateLookAt);
+    lookAtFolder
+      .add(guiParams, "lookAtX", -2000, 2000, 1)
+      .name("Look At X")
+      .onChange(updateLookAt);
+    lookAtFolder
+      .add(guiParams, "lookAtY", -500, 500, 1)
+      .name("Look At Y")
+      .onChange(updateLookAt);
+    lookAtFolder
+      .add(guiParams, "lookAtZ", -2000, 2000, 1)
+      .name("Look At Z")
+      .onChange(updateLookAt);
 
     // 3D lighting controls (only visible when 3D view is enabled)
     const ambientLightCtrl = gui

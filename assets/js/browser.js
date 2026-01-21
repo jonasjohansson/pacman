@@ -211,52 +211,7 @@ function initGameUI() {
     }
 
     alert(message);
-
-    // Submit score to server
-    await submitScore(gameResult.score, playerName, false);
   };
-}
-
-async function submitScore(score, playerName, isTeamGame) {
-  try {
-    // Get server address (use same logic as highscore)
-    const params = new URLSearchParams(window.location.search);
-    const serverParam = params.get("server");
-    
-    const LOCAL_SERVER_ADDRESS = "http://localhost:3000";
-    const REMOTE_SERVER_ADDRESS = "https://pacman-server-239p.onrender.com";
-    
-    let serverAddress = REMOTE_SERVER_ADDRESS;
-    if (serverParam) {
-      if (serverParam.startsWith("http://") || serverParam.startsWith("https://")) {
-        serverAddress = serverParam;
-      } else if (serverParam.toLowerCase() === "local" || serverParam.toLowerCase() === "localhost") {
-        serverAddress = LOCAL_SERVER_ADDRESS;
-      }
-    } else if (window.location.origin === "http://localhost" || window.location.origin.startsWith("http://localhost:")) {
-      serverAddress = LOCAL_SERVER_ADDRESS;
-    }
-
-    const response = await fetch(`${serverAddress}/api/highscore`, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({
-        score: score,
-        playerName: playerName || "LOC",
-        isTeamGame: isTeamGame,
-      }),
-    });
-
-    if (response.ok) {
-      console.log("[browser] Score submitted successfully");
-    } else {
-      console.error("[browser] Failed to submit score:", response.status);
-    }
-  } catch (error) {
-    console.error("[browser] Error submitting score:", error);
-  }
 }
 
 // Wait for DOM to be ready

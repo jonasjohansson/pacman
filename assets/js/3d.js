@@ -18,14 +18,20 @@ let useOrthographic = true; // Default to orthographic
 let cameraZoom = 0.98; // Camera zoom level
 let baseViewSize = 0; // Base view size (calculated on init)
 let cameraOffset = { x: 0, y: 0, z: 0 }; // User-controlled camera offsets
+let orthoFrustum = { left: null, right: null, top: null, bottom: null, near: 0.1, far: 1000 }; // Orthographic frustum (null = auto-calculated)
+let lookAtPoint = { x: null, y: 0, z: null }; // LookAt point (null = center of level)
 
 function applyCameraPosition() {
   const centerX = (COLS * CELL_SIZE) / 2;
   const centerZ = (ROWS * CELL_SIZE) / 2;
-  const lookAtY = 0; // Always look at ground level
+  
+  // Use custom lookAt point if set, otherwise use center
+  const lookAtX = lookAtPoint.x !== null ? lookAtPoint.x : centerX;
+  const lookAtY = lookAtPoint.y !== null ? lookAtPoint.y : 0;
+  const lookAtZ = lookAtPoint.z !== null ? lookAtPoint.z : centerZ;
 
   if (orthographicCamera) {
-    // For orthographic, move camera position and always look at center
+    // For orthographic, move camera position and look at specified point
     const baseX = centerX;
     const baseY = 200;
     const baseZ = centerZ;
@@ -35,8 +41,8 @@ function applyCameraPosition() {
       baseY + cameraOffset.y,
       baseZ + cameraOffset.z
     );
-    // Always look at the center of the level, regardless of camera position
-    orthographicCamera.lookAt(centerX, lookAtY, centerZ);
+    // Look at the specified point
+    orthographicCamera.lookAt(lookAtX, lookAtY, lookAtZ);
   }
 
   if (perspectiveCamera) {
@@ -57,8 +63,8 @@ function applyCameraPosition() {
       baseY + cameraOffset.y,
       baseZ + cameraOffset.z
     );
-    // Always look at the center of the level, regardless of camera position
-    perspectiveCamera.lookAt(centerX, lookAtY, centerZ);
+    // Look at the specified point
+    perspectiveCamera.lookAt(lookAtX, lookAtY, lookAtZ);
   }
 }
 let fugitives3D = [];
@@ -97,7 +103,15 @@ function init3D() {
     bottom = -viewSize / aspect / 2;
   }
 
-  orthographicCamera = new THREE.OrthographicCamera(left, right, top, bottom, 0.1, 1000);
+  // Use custom frustum if set, otherwise use calculated values
+  const near = orthoFrustum.near !== null ? orthoFrustum.near : 0.1;
+  const far = orthoFrustum.far !== null ? orthoFrustum.far : 1000;
+  const finalLeft = orthoFrustum.left !== null ? orthoFrustum.left : left;
+  const finalRight = orthoFrustum.right !== null ? orthoFrustum.right : right;
+  const finalTop = orthoFrustum.top !== null ? orthoFrustum.top : top;
+  const finalBottom = orthoFrustum.bottom !== null ? orthoFrustum.bottom : bottom;
+  
+  orthographicCamera = new THREE.OrthographicCamera(finalLeft, finalRight, finalTop, finalBottom, near, far);
 
   // Perspective camera - zoomed out to see the whole level
   const levelWidth = COLS * CELL_SIZE;
@@ -590,18 +604,32 @@ function onWindowResize3D() {
 
   if (useOrthographic && orthographicCamera) {
     // Update orthographic camera bounds
-    const viewSize = baseViewSize * cameraZoom;
-    if (aspect >= 1) {
-      orthographicCamera.left = (-viewSize * aspect) / 2;
-      orthographicCamera.right = (viewSize * aspect) / 2;
-      orthographicCamera.top = viewSize / 2;
-      orthographicCamera.bottom = -viewSize / 2;
+    // Use custom frustum if set, otherwise auto-calculate
+    if (orthoFrustum.left !== null && orthoFrustum.right !== null && 
+        orthoFrustum.top !== null && orthoFrustum.bottom !== null) {
+      // Use custom frustum values
+      orthographicCamera.left = orthoFrustum.left;
+      orthographicCamera.right = orthoFrustum.right;
+      orthographicCamera.top = orthoFrustum.top;
+      orthographicCamera.bottom = orthoFrustum.bottom;
     } else {
-      orthographicCamera.left = -viewSize / 2;
-      orthographicCamera.right = viewSize / 2;
-      orthographicCamera.top = viewSize / aspect / 2;
-      orthographicCamera.bottom = -viewSize / aspect / 2;
+      // Auto-calculate based on view size and zoom
+      const viewSize = baseViewSize * cameraZoom;
+      if (aspect >= 1) {
+        orthographicCamera.left = (-viewSize * aspect) / 2;
+        orthographicCamera.right = (viewSize * aspect) / 2;
+        orthographicCamera.top = viewSize / 2;
+        orthographicCamera.bottom = -viewSize / 2;
+      } else {
+        orthographicCamera.left = -viewSize / 2;
+        orthographicCamera.right = viewSize / 2;
+        orthographicCamera.top = viewSize / aspect / 2;
+        orthographicCamera.bottom = -viewSize / aspect / 2;
+      }
     }
+    // Apply near and far planes
+    orthographicCamera.near = orthoFrustum.near;
+    orthographicCamera.far = orthoFrustum.far;
     orthographicCamera.updateProjectionMatrix();
   } else if (perspectiveCamera) {
     perspectiveCamera.aspect = aspect;
@@ -622,6 +650,36 @@ function setCameraZoom(zoom) {
 
 function setCameraPosition(x, y, z) {
   cameraOffset = { x: x || 0, y: y || 0, z: z || 0 };
+  applyCameraPosition();
+}
+
+function setOrthographicFrustum(left, right, top, bottom, near, far) {
+  orthoFrustum.left = left !== null && left !== undefined ? left : null;
+  orthoFrustum.right = right !== null && right !== undefined ? right : null;
+  orthoFrustum.top = top !== null && top !== undefined ? top : null;
+  orthoFrustum.bottom = bottom !== null && bottom !== undefined ? bottom : null;
+  orthoFrustum.near = near !== null && near !== undefined ? near : 0.1;
+  orthoFrustum.far = far !== null && far !== undefined ? far : 1000;
+  
+  // Update camera if it exists
+  if (orthographicCamera) {
+    if (orthoFrustum.left !== null) orthographicCamera.left = orthoFrustum.left;
+    if (orthoFrustum.right !== null) orthographicCamera.right = orthoFrustum.right;
+    if (orthoFrustum.top !== null) orthographicCamera.top = orthoFrustum.top;
+    if (orthoFrustum.bottom !== null) orthographicCamera.bottom = orthoFrustum.bottom;
+    orthographicCamera.near = orthoFrustum.near;
+    orthographicCamera.far = orthoFrustum.far;
+    orthographicCamera.updateProjectionMatrix();
+  } else {
+    // Camera not created yet, will use these values on init
+    onWindowResize3D();
+  }
+}
+
+function setLookAtPoint(x, y, z) {
+  lookAtPoint.x = x !== null && x !== undefined ? x : null;
+  lookAtPoint.y = y !== null && y !== undefined ? y : 0;
+  lookAtPoint.z = z !== null && z !== undefined ? z : null;
   applyCameraPosition();
 }
 
@@ -867,6 +925,8 @@ window.render3D = {
   setTeamImage: setTeamImage,
   setCameraZoom: setCameraZoom,
   setCameraPosition: setCameraPosition,
+  setOrthographicFrustum: setOrthographicFrustum,
+  setLookAtPoint: setLookAtPoint,
   useOrthographic: () => useOrthographic,
   initialized: false,
 };
