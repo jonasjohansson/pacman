@@ -34,6 +34,43 @@ function init3DView() {
   }
 }
 
+// Initialize keyboard controls (WASD)
+function initKeyboardControls() {
+  console.log("[browser] Initializing keyboard controls...");
+  
+  const keyMap = {
+    'w': 'up',
+    'a': 'left',
+    's': 'down',
+    'd': 'right',
+    'W': 'up',
+    'A': 'left',
+    'S': 'down',
+    'D': 'right',
+    'ArrowUp': 'up',
+    'ArrowLeft': 'left',
+    'ArrowDown': 'down',
+    'ArrowRight': 'right'
+  };
+
+  let keysPressed = new Set();
+
+  document.addEventListener('keydown', (e) => {
+    if (!gameStarted) return;
+    
+    const dir = keyMap[e.key];
+    if (dir && !keysPressed.has(e.key)) {
+      keysPressed.add(e.key);
+      console.log("[browser] Key pressed:", e.key, "-> direction:", dir);
+      sendLocalInput(dir);
+    }
+  });
+
+  document.addEventListener('keyup', (e) => {
+    keysPressed.delete(e.key);
+  });
+}
+
 // Initialize swipe controls on the game canvas
 function initSwipeControls(canvas) {
   console.log("[browser] Initializing swipe controls...");
@@ -186,6 +223,9 @@ function initBrowser() {
       
       // Initialize controller
       initLocalController();
+      
+      // Initialize keyboard controls
+      initKeyboardControls();
 
       // Initialize game UI
       initGameUI();
