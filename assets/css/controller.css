@@ -5,7 +5,6 @@ body {
   color: black;
   margin: 0;
   padding: var(--spacing-lg);
-  text-transform: uppercase;
 }
 
 .welcome-message {
