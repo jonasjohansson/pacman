@@ -83,8 +83,8 @@ const helperSettings = {
 const cursorLightSettings = {
   enabled: true,
   color: '#ffffff',
-  intensity: 2.0,
-  distance: 200,
+  intensity: 200,
+  distance: 0,
 };
 
 // Lights
@@ -418,8 +418,8 @@ function initGUI() {
   const cursorLightFolder = guiRight.addFolder('Cursor Light');
   cursorLightFolder.add(cursorLightSettings, 'enabled').name('Enabled').onChange(updateCursorLightFromSettings);
   cursorLightFolder.addColor(cursorLightSettings, 'color').name('Color').onChange(updateCursorLightFromSettings);
-  cursorLightFolder.add(cursorLightSettings, 'intensity', 0, 110).name('Intensity').onChange(updateCursorLightFromSettings);
-  cursorLightFolder.add(cursorLightSettings, 'distance', 10, 500).name('Distance').onChange(updateCursorLightFromSettings);
+  cursorLightFolder.add(cursorLightSettings, 'intensity', 0, 500).name('Intensity').onChange(updateCursorLightFromSettings);
+  cursorLightFolder.add(cursorLightSettings, 'distance', 0, 500).name('Distance').onChange(updateCursorLightFromSettings);
   cursorLightFolder.open();
 
   // Helper visibility folder (grid & axes, right)
